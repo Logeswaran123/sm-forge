@@ -77,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
         "baselines", help="time eager, torch.compile and seed kernels into results/baselines.csv"
     )
     baselines.add_argument("--ids", help="comma-separated problem ids")
+    baselines.add_argument("--source", help="only problems from this source")
     baselines.add_argument("--split", choices=("dev", "eval"))
     baselines.add_argument("--modes", default="eager,compile,seed")
     baselines.add_argument("--variant", default="bench-gpu")
