@@ -17,6 +17,7 @@ bench-gpu:
     HIDDEN_SIZE: 8192
   flop: 137438953472
   bytes: 301993984
+  atol: 0.05
 ci:
 - params: [x0]
   dtype: float32
@@ -26,9 +27,11 @@ ci:
     HIDDEN_SIZE: 8192
   flop: 402653184
   bytes: 268533772
+  atol: 0.05
 kernelbench:
 - params: [x0]
   dims:
     BATCH_SIZE: 1024
     INPUT_SIZE: 8192
     HIDDEN_SIZE: 8192
+  atol: 0.05

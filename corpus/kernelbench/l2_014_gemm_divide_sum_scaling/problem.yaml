@@ -5,3 +5,5 @@ upstream: KernelBench/level2/14_Gemm_Divide_Sum_Scaling.py@423217d9fda9
 notes:
 - float16 reference differs from float32 by up to 4.36
 - bfloat16 reference differs from float32 by up to 28.3
+- 'atol 0.05: each output sums 67M products and is about 3500 in size; float32 PyTorch is 0.0093
+  off float64 at bench-gpu, a float32 Triton kernel 0.019'
