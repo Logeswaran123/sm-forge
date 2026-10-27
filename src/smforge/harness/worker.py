@@ -156,7 +156,7 @@ class Session:
 
 
 def _rates(timing: Timing, workload: Workload, graph: bool) -> Timing:
-    seconds = timing.median_us * 1e-6
+    seconds = timing.time_us * 1e-6
     timing.graph = graph
     if workload.flop:
         timing.tflops = workload.flop / seconds / 1e12

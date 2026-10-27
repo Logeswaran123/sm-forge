@@ -4,6 +4,11 @@ Every sample is preceded, untimed, by an L2 flush and a 1024x1024 matmul. The ma
 GPU busy while the host enqueues the start event, the call and the end event, so a short kernel
 is not timed together with its launch latency.
 
+A run is summarized by a low quantile of its samples (``TimingConfig.quantile``, p20 by
+default), not the median. Interference from other work on the GPU only ever adds time; on WSL2,
+where the Windows desktop shares the GPU, it slowed up to 40% of samples of a 1.2 ms matmul,
+and the median of identical runs moved by 16%. The p20 of the same runs moved by under 0.1%.
+
 ``Timer.compare`` times two calls in alternating rounds. Drift in clocks or temperature then
 lands on both arms, and identical code measures as parity instead of a speedup.
 """
@@ -48,13 +53,14 @@ class Timer:
 
     def time(self, fn: Callable[[], object], flush: bool = True) -> Timing:
         self.warmup(fn)
-        return summarize(self.samples(fn, self.config.iters, flush))
+        return summarize(self.samples(fn, self.config.iters, flush), self.config.quantile)
 
     def compare(
         self, baseline: Callable[[], object], candidate: Callable[[], object]
     ) -> Comparison:
         self.warmup(baseline)
         self.warmup(candidate)
+        q = self.config.quantile
         per_round = max(1, self.config.iters // self.config.rounds)
         baseline_all: list[float] = []
         candidate_all: list[float] = []
@@ -68,8 +74,8 @@ class Timer:
                 b = self.samples(baseline, per_round)
             baseline_all += b
             candidate_all += c
-            ratios.append(median(b) / median(c))
-        baseline_us, candidate_us = median(baseline_all), median(candidate_all)
+            ratios.append(quantile(b, q) / quantile(c, q))
+        baseline_us, candidate_us = quantile(baseline_all, q), quantile(candidate_all, q)
         speedup = baseline_us / candidate_us
         return Comparison(
             baseline_us=baseline_us,
@@ -77,20 +83,24 @@ class Timer:
             speedup=speedup,
             verdict=verdict(speedup, self.config.min_effect),
             min_effect=self.config.min_effect,
+            quantile=q,
             ratios=ratios,
         )
 
 
-def summarize(samples: list[float]) -> Timing:
-    """Median and mean after dropping the fastest and slowest sample."""
+def quantile(samples: list[float], q: float) -> float:
     ordered = sorted(samples)
-    if len(ordered) >= 10:
-        ordered = ordered[1:-1]
+    return ordered[round(q * (len(ordered) - 1))]
+
+
+def summarize(samples: list[float], q: float) -> Timing:
     return Timing(
-        median_us=median(ordered),
-        mean_us=fmean(ordered),
-        min_us=ordered[0],
-        max_us=ordered[-1],
+        time_us=quantile(samples, q),
+        quantile=q,
+        median_us=median(samples),
+        mean_us=fmean(samples),
+        min_us=min(samples),
+        max_us=max(samples),
         samples=len(samples),
     )
 

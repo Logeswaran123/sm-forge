@@ -64,6 +64,8 @@ class LaunchProfile(BaseModel):
 
 
 class Timing(BaseModel):
+    time_us: float
+    quantile: float
     median_us: float
     mean_us: float
     min_us: float
@@ -86,6 +88,7 @@ class Comparison(BaseModel):
     speedup: float
     verdict: Verdict
     min_effect: float
+    quantile: float
     ratios: list[float]
     graph: bool = False
 
@@ -178,7 +181,7 @@ class Roofline(BaseModel):
 
 class NoiseCase(BaseModel):
     name: str
-    median_us: float
+    time_us: float
     deviation: float
     spread: float
 

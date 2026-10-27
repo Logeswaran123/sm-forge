@@ -41,7 +41,7 @@ def _copy_gbps(timer: Timer, device: torch.device, nbytes: int, flush: bool = Tr
     src = torch.rand(nbytes // 4, device=device)
     dst = torch.empty_like(src)
     timing = timer.time(lambda: dst.copy_(src), flush=flush)
-    return 2 * nbytes / timing.median_us / 1e3
+    return 2 * nbytes / timing.time_us / 1e3
 
 
 def _read_gbps(timer: Timer, device: torch.device, nbytes: int) -> float:
@@ -50,7 +50,7 @@ def _read_gbps(timer: Timer, device: torch.device, nbytes: int) -> float:
     grid = (triton.cdiv(n, READ_BLOCK),)
     out = torch.empty(grid[0], device=device)
     timing = timer.time(lambda: read_kernel[grid](x, out, n, BLOCK=READ_BLOCK))
-    return nbytes / timing.median_us / 1e3
+    return nbytes / timing.time_us / 1e3
 
 
 def _matmul_tflops(timer: Timer, device: torch.device) -> dict[str, float]:
@@ -72,7 +72,7 @@ def _mm_tflops(timer: Timer, device: torch.device, dtype: torch.dtype, n: int) -
     a = torch.randn(n, n, device=device, dtype=dtype)
     b = torch.randn(n, n, device=device, dtype=dtype)
     timing = timer.time(lambda: torch.mm(a, b), flush=False)
-    return 2 * n**3 / timing.median_us / 1e6
+    return 2 * n**3 / timing.time_us / 1e6
 
 
 def _fp8_tflops(timer: Timer, device: torch.device, n: int) -> float:
@@ -83,4 +83,4 @@ def _fp8_tflops(timer: Timer, device: torch.device, n: int) -> float:
         lambda: torch._scaled_mm(a, b, scale_a=one, scale_b=one, out_dtype=torch.bfloat16),
         flush=False,
     )
-    return 2 * n**3 / timing.median_us / 1e6
+    return 2 * n**3 / timing.time_us / 1e6

@@ -15,6 +15,7 @@ class TimingConfig(BaseModel):
     iters: int = 200
     rounds: int = 10
     flush_mb: int = 256
+    quantile: float = 0.2
     min_effect: float = 0.02
 
 
@@ -48,6 +49,7 @@ class Config(BaseModel):
                     iters=("BENCH_ITERS", int),
                     rounds=("BENCH_ROUNDS", int),
                     flush_mb=("BENCH_FLUSH_MB", int),
+                    quantile=("BENCH_QUANTILE", float),
                     min_effect=("BENCHMARK_MIN_EFFECT", float),
                 )
             ),

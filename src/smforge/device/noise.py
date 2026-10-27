@@ -30,7 +30,7 @@ def measure_noise(timer: Timer, device: torch.device) -> NoiseResult:
         results.append(
             NoiseCase(
                 name=name,
-                median_us=comparison.baseline_us,
+                time_us=comparison.baseline_us,
                 deviation=abs(comparison.speedup - 1),
                 spread=max(abs(r - 1) for r in comparison.ratios),
             )

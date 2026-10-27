@@ -104,7 +104,7 @@ def test_pytorch_fallback_is_flagged(runner, tmp_path):
 
 def test_bench_and_compare(runner):
     timing = runner.bench(KERNEL, spec=SPEC)
-    assert timing.median_us > 0
+    assert timing.time_us > 0
     assert timing.samples == 40
     assert timing.tflops and timing.gbps
     comparison = runner.compare(KERNEL, KERNEL, spec=SPEC)
@@ -115,7 +115,7 @@ def test_bench_and_compare(runner):
 def test_graph_mode(runner):
     timing = runner.bench(KERNEL, spec=SPEC, graph=True)
     assert timing.graph
-    assert timing.median_us > 0
+    assert timing.time_us > 0
 
 
 def test_facts(runner):

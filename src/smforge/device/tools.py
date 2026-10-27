@@ -14,7 +14,7 @@ from pathlib import Path
 from smforge.models import ToolStatus
 
 PROGRAM = "import torch; x = torch.ones(1 << 20, device='cuda'); print(float((x * 2).sum()))"
-_TOOL_ERROR = re.compile(r"==ERROR==|ERROR SUMMARY: [1-9]")
+_TOOL_ERROR = re.compile(r"==ERROR==|=+ Error: |ERROR SUMMARY: [1-9]")
 
 
 def find_tool(name: str) -> str | None:
@@ -81,8 +81,11 @@ def _run_tool(name: str, command: Callable[[str], list[str]], timeout: float) ->
         out = subprocess.run(command(path), capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return ToolStatus(name=name, path=path, ok=False, detail=f"timed out after {timeout:.0f}s")
-    errors = [line.strip() for line in (out.stdout + out.stderr).splitlines()]
-    errors = [line for line in errors if _TOOL_ERROR.search(line)]
+    errors = [
+        line.strip(" =")
+        for line in (out.stdout + out.stderr).splitlines()
+        if _TOOL_ERROR.search(line)
+    ]
     if errors:
         return ToolStatus(name=name, path=path, ok=False, detail=errors[0])
     if out.returncode != 0:

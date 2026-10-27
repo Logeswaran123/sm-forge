@@ -60,8 +60,9 @@ def launches(profile: LaunchProfile) -> str:
 def timing(result: Timing) -> str:
     mode = ", CUDA graph" if result.graph else ""
     lines = [
-        f"median {result.median_us:.1f} us, mean {result.mean_us:.1f} us, "
-        f"min {result.min_us:.1f} us, max {result.max_us:.1f} us ({result.samples} samples{mode})"
+        f"{result.time_us:.1f} us (p{result.quantile * 100:.0f} of {result.samples} samples{mode}); "
+        f"median {result.median_us:.1f}, mean {result.mean_us:.1f}, min {result.min_us:.1f}, "
+        f"max {result.max_us:.1f}"
     ]
     rates = []
     if result.tflops:
@@ -75,8 +76,9 @@ def timing(result: Timing) -> str:
 
 def comparison(result: Comparison) -> str:
     return (
-        f"baseline {result.baseline_us:.1f} us, candidate {result.candidate_us:.1f} us: "
-        f"{result.speedup:.3f}x, {result.verdict} (min effect {result.min_effect:.1%})\n"
+        f"baseline {result.baseline_us:.1f} us, candidate {result.candidate_us:.1f} us "
+        f"(p{result.quantile * 100:.0f}): {result.speedup:.3f}x, {result.verdict} "
+        f"(min effect {result.min_effect:.1%})\n"
         f"rounds: {' '.join(f'{r:.3f}' for r in result.ratios)}"
     )
 
@@ -145,7 +147,7 @@ def device(profile: DeviceProfile) -> str:
         lines.append("A/A noise:")
         for case in profile.noise.cases:
             lines.append(
-                f"  {case.name:<15}{case.median_us:>9.1f} us, deviation {case.deviation:.2%}, "
+                f"  {case.name:<15}{case.time_us:>9.1f} us, deviation {case.deviation:.2%}, "
                 f"round spread {case.spread:.2%}"
             )
         lines.append(f"  suggested BENCHMARK_MIN_EFFECT={profile.noise.min_effect}")
