@@ -1,0 +1,16 @@
+inputs:
+  X: {shape: [M, K], dtype: float16}
+inits:
+  - in_features: K
+  - out_features: N
+ci:
+  - params: [X]
+    dtype: float16
+    dims: {M: 127, K: 96, N: 200}
+    flop: "2*M*N*K"
+bench-gpu:
+  - params: [X]
+    dtype: float16
+    dims: {M: 4096, K: 2048, N: 2048}
+    flop: "2*M*N*K"
+    bytes: "2*(M*K + N*K + M*N)"
