@@ -24,6 +24,9 @@ COMPILE_MODES = {
 def profile_reference(workload: Workload, module: ModuleType) -> ReferenceProfile:
     """Footprint, time, FLOPs and bytes of one forward at the variant's dtype.
 
+    The footprint is the peak during the forward: the resident model and inputs plus whatever the
+    forward allocates, not the transient copies made while building the model.
+
     FLOPs are left out when PyTorch's counter rejects an op, as it does grouped-query attention.
 
     For a dtype below float32 the same weights and inputs also run in float32. ``stable`` says
@@ -32,9 +35,9 @@ def profile_reference(workload: Workload, module: ModuleType) -> ReferenceProfil
     """
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
     model = workload.build(module)
     inputs = workload.inputs()
+    torch.cuda.reset_peak_memory_stats()
     flop = None
     try:
         with FlopCounterMode(display=False) as counter:

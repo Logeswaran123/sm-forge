@@ -157,12 +157,13 @@ class Workload:
         ]
 
     def build(self, module: ModuleType, dtype: torch.dtype | None = None) -> nn.Module:
+        """``Model`` on the device, cast parameter by parameter so no full float32 copy lands."""
         set_seed(INIT_SEED)
-        model = module.Model(*self.init_args()).to(self.device).eval()
+        model = module.Model(*self.init_args()).eval()
         dtype = dtype or self.dtype
         if dtype in CASTABLE:
-            model = model.to(dtype)
-        return model
+            return model.to(device=self.device, dtype=dtype)
+        return model.to(self.device)
 
     def key(self) -> str:
         """Identifies the inputs and init arguments, for caching reference outputs."""

@@ -128,3 +128,13 @@ def test_import_kernelbench(runner, kernelbench_file, tmp_path):
     assert profile.finite and profile.stable
     for mode in ("eager", "compile"):
         assert runner.baseline(problem.reference, mode, spec=problem.spec).time_us > 0
+
+
+def test_scale_dim():
+    from smforge.corpus.build import scale_dim
+
+    matmul = {"inputs": {"A": {"shape": ["M", "K"]}, "B": {"shape": ["K", "N"]}}, "inits": []}
+    assert scale_dim(matmul, {"M": 8, "K": 4, "N": 2}) == "M"
+    batched = {**matmul, "inits": [{"bias_shape": ["M", 1]}]}
+    assert scale_dim(batched, {"BATCH_SIZE": 4, "M": 8}) == "BATCH_SIZE"
+    assert scale_dim(batched, {"M": 8, "K": 4}) is None

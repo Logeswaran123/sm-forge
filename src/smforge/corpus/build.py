@@ -1,10 +1,14 @@
 """Importing KernelBench problems and fitting them to the GPU.
 
-The spec keeps KernelBench's shapes as the ``kernelbench`` variant. ``bench-gpu`` halves the batch
-until the float16 reference fits ``PEAK_BYTES`` and ``TIME_US``, then takes the first of float16,
-bfloat16 and float32 whose reference result is finite and within that dtype's tolerance of float32.
-``ci`` is ``bench-gpu`` at batch ``CI_BATCH``, a shape that exercises masking and is never used
-while optimizing.
+The spec keeps KernelBench's shapes as the ``kernelbench`` variant. ``bench-gpu`` halves one dim,
+the batch or else the leading dim of the first input, until the float16 reference fits
+``PEAK_BYTES`` and ``TIME_US``; a reference that cannot run at a size (out of memory) counts as
+over. It then takes the first of float16, bfloat16 and float32 whose reference result is finite
+and within that dtype's tolerance of float32. ``ci`` is ``bench-gpu`` with that dim at
+``CI_BATCH``, a shape that exercises masking and is never used while optimizing.
+
+Each problem is fitted in a fresh worker. On WSL2 an out-of-memory attempt can spill into system
+memory, and a worker that did that measures the next problem several times too slow.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ def import_kernelbench(
     path: Path, level: int, root: Path, runner: Runner, upstream: str
 ) -> Problem:
     sections, dims = translate(path)
+    runner.close()
     pid = problem_id(level, path)
     problem = Problem(
         id=pid,
@@ -64,20 +69,45 @@ def write_spec(problem: Problem, sections: dict, variants: dict[str, list[dict]]
     problem.spec.write_text(dump_spec(document))
 
 
+def scale_dim(sections: dict, dims: dict[str, int]) -> str | None:
+    """The dim to shrink: the batch, else the first input's leading dim if no init uses it."""
+    if BATCH_DIM in dims:
+        return BATCH_DIM
+    shape = next(iter(sections["inputs"].values()))["shape"]
+    lead = shape[0] if shape and isinstance(shape[0], str) else None
+    used = {str(v) for entry in sections["inits"] for v in _flatten(list(entry.values()))}
+    return lead if lead in dims and lead not in used else None
+
+
+def _flatten(values: list) -> list:
+    return [x for v in values for x in (_flatten(v) if isinstance(v, list) else [v])]
+
+
 def _fit(
     problem: Problem, sections: dict, params: list[str], dims: dict[str, int], runner: Runner
 ) -> tuple[str, dict[str, int], ReferenceProfile, list[str]]:
     fitted, notes = dict(dims), []
-    batch = BATCH_DIM if BATCH_DIM in dims else None
-    while True:
-        profile = _profile(problem, sections, params, "float16", fitted, runner)
-        over = profile.peak_bytes > PEAK_BYTES or profile.time_us > TIME_US
-        if not over or batch is None or fitted[batch] == 1:
-            break
-        fitted[batch] = max(1, fitted[batch] // 2)
+    scaled = scale_dim(sections, dims)
     budget = f"{PEAK_BYTES >> 30} GiB and {TIME_US / 1000:g} ms"
-    if batch and fitted[batch] != dims[batch]:
-        notes.append(f"{batch} {dims[batch]} -> {fitted[batch]} to fit {budget} in float16")
+    reasons = []
+    while True:
+        try:
+            profile = _profile(problem, sections, params, "float16", fitted, runner)
+            over = profile.peak_bytes > PEAK_BYTES or profile.time_us > TIME_US
+            reason = f"{profile.peak_bytes / 2**30:.1f} GiB, {profile.time_us / 1000:.1f} ms"
+        except WorkerError as e:
+            if scaled is None or fitted[scaled] == 1:
+                raise
+            profile, over, reason = None, True, str(e).splitlines()[0][:80]
+        if not over or scaled is None or fitted[scaled] == 1:
+            break
+        reasons.append(f"{fitted[scaled]}: {reason}")
+        fitted[scaled] = max(1, fitted[scaled] // 2)
+    if scaled and fitted[scaled] != dims[scaled]:
+        notes.append(
+            f"{scaled} {dims[scaled]} -> {fitted[scaled]} to fit {budget} in float16 "
+            f"({'; '.join(reasons)})"
+        )
     elif over:
         notes.append(
             f"over {budget} at KernelBench shapes: {profile.peak_bytes / 2**30:.1f} GiB, "
@@ -105,9 +135,10 @@ def _ci(
     dims: dict[str, int],
     runner: Runner,
 ) -> dict | None:
-    if dims.get(BATCH_DIM, 0) <= CI_BATCH:
+    scaled = scale_dim(sections, dims)
+    if scaled is None or dims[scaled] <= CI_BATCH:
         return None
-    ci_dims = {**dims, BATCH_DIM: CI_BATCH}
+    ci_dims = {**dims, scaled: CI_BATCH}
     try:
         profile = _profile(problem, sections, params, dtype, ci_dims, runner)
     except WorkerError as e:
