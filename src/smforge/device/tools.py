@@ -15,6 +15,7 @@ from smforge.models import ToolStatus
 
 PROGRAM = "import torch; x = torch.ones(1 << 20, device='cuda'); print(float((x * 2).sum()))"
 _TOOL_ERROR = re.compile(r"==ERROR==|=+ Error: |ERROR SUMMARY: [1-9]")
+_TOOL_PREFIX = re.compile(r"^=+(?:ERROR=+)?\s*")
 
 
 def find_tool(name: str) -> str | None:
@@ -82,7 +83,7 @@ def _run_tool(name: str, command: Callable[[str], list[str]], timeout: float) ->
     except subprocess.TimeoutExpired:
         return ToolStatus(name=name, path=path, ok=False, detail=f"timed out after {timeout:.0f}s")
     errors = [
-        line.strip(" =")
+        _TOOL_PREFIX.sub("", line.strip())
         for line in (out.stdout + out.stderr).splitlines()
         if _TOOL_ERROR.search(line)
     ]
