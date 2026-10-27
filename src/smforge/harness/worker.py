@@ -18,11 +18,15 @@ from typing import Any
 import torch
 
 from smforge.config import TimingConfig
+from smforge.device.noise import measure_noise
+from smforge.device.probes import PROBES, run_probe
+from smforge.device.query import query_device
+from smforge.device.roofline import measure_roofline
 from smforge.harness.correctness import ReferenceCache, check_kernel
 from smforge.harness.facts import collect_facts
 from smforge.harness.launches import profile_launches, triton_names
 from smforge.harness.timing import Timer, graph_callable
-from smforge.harness.workload import Workload, clone, load_module
+from smforge.harness.workload import Workload, clone, cuda_healthy, load_module
 from smforge.models import FactsReport, Timing
 
 
@@ -135,6 +139,21 @@ class Session:
         )
         return report.model_dump(mode="json")
 
+    def op_device(self) -> dict:
+        return query_device(self.device.index).model_dump(mode="json")
+
+    def op_probe_names(self) -> list[str]:
+        return list(PROBES)
+
+    def op_probe(self, name: str) -> dict:
+        return run_probe(name, self.device).model_dump(mode="json")
+
+    def op_roofline(self) -> dict:
+        return measure_roofline(self.device).model_dump(mode="json")
+
+    def op_noise(self, timing: dict) -> dict:
+        return measure_noise(self.timer(timing), self.device).model_dump(mode="json")
+
 
 def _rates(timing: Timing, workload: Workload, graph: bool) -> Timing:
     seconds = timing.median_us * 1e-6
@@ -144,14 +163,6 @@ def _rates(timing: Timing, workload: Workload, graph: bool) -> Timing:
     if workload.bytes_moved:
         timing.gbps = workload.bytes_moved / seconds / 1e9
     return timing
-
-
-def cuda_healthy() -> bool:
-    try:
-        torch.cuda.synchronize()
-        return True
-    except Exception:
-        return False
 
 
 def serve(session: Session, requests, replies) -> None:

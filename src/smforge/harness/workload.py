@@ -84,6 +84,15 @@ def clone(values: list) -> list:
     return [v.clone() if isinstance(v, torch.Tensor) else v for v in values]
 
 
+def cuda_healthy() -> bool:
+    """False once a CUDA error has left the context unusable."""
+    try:
+        torch.cuda.synchronize()
+        return True
+    except Exception:
+        return False
+
+
 @dataclass
 class Workload:
     """Inputs and ``Model`` construction for one spec variant.
