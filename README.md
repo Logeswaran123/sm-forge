@@ -60,6 +60,21 @@ smforge-skill facts kernel.py --spec spec.yaml
 Every GPU command runs in a worker subprocess. A kernel that faults the CUDA context kills only
 the worker, which is restarted for the next request.
 
+## Corpus
+
+Problems live in `corpus/<source>/<id>/`: `reference.py`, `spec.yaml`, `problem.yaml`, and once
+seeded, `kernel.py` with its `seed.yaml`.
+
+```bash
+smforge corpus import-kernelbench <KernelBench checkout> --level 2
+smforge corpus split                       # dev / eval, stratified by family; eval stays frozen
+smforge corpus list --split dev
+smforge seed --source inference            # LLM-written seed kernels, verified on the GPU
+smforge seed --backend claude-code         # same, through `claude -p` instead of an API key
+smforge corpus baselines --modes eager,compile,seed    # writes results/baselines.csv
+python scripts/roofline.py                 # plots/roofline.png
+```
+
 ## Tests
 
 ```bash
