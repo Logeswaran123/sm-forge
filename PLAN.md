@@ -223,6 +223,29 @@ Cluster launch and clock locking were not tested. Clock locking needs root.
     Windows desktop slowed up to 40% of the samples of a 1.2 ms matmul: the medians of two
     identical A/A arms differed by 16%, their p20s by under 0.1%.
 
+11. **Fitting KernelBench to the GPU.** A problem is translated to a spec by reading its source as
+    an AST; its code is never imported to build the spec. The upstream shapes stay as the
+    `kernelbench` variant. `bench-gpu` halves the batch (else the first input's leading dim) until
+    the float16 reference fits 4 GiB and 5 ms, then takes the first of float16, bfloat16 and
+    float32 whose output is finite and within that dtype's tolerance of float32. `ci` is
+    `bench-gpu` at batch 3.
+
+12. **Oracle precision.** The worker turns off TF32 and reduced-precision split-K reductions in
+    cuBLAS, so a reference accumulates in float32 whatever its dtype. Eager baselines run under the
+    same settings. With PyTorch's defaults the bf16 reference of a 3×524288×256 matmul was 5% off
+    float32. For correctness, a float32 problem's PyTorch reference runs in float64: eager float32
+    was 0.032 off float64 on a ConvTranspose2d + GroupNorm problem at batch 512, where a Triton
+    kernel was 8e-6 off.
+
+13. **Seeds through Claude Code.** `smforge seed` (option B) runs CoVeR with correctness-only
+    verification. The LLM backend is the Messages API or headless Claude Code (`claude -p`, no
+    tools, in an empty directory); stage 2 used Claude Code.
+
+14. **WSL2 workarounds.** The PyTorch profiler stops recording CUDA activity about 40 s after a
+    process first profiles, so each launch audit runs in a fresh worker and an empty profile is an
+    error. An out-of-memory attempt can spill into system memory and slow the worker for the rest
+    of its life, so each imported problem is fitted in a fresh worker.
+
 ## 5. Repository layout
 
 ```
@@ -404,6 +427,23 @@ with a message that names the cause.
 - Roofline script: each kernel plotted at its arithmetic intensity against the stage 0 ceilings.
 
 Exit: at least 120 problems with passing seeds and measured baselines. The split is committed.
+
+Result (2026-10-27): 138 problems: 12 inference, all 100 of Level 2 and 26 of Level 1. Dev holds
+96 and eval 42. Every problem has a seed from Claude Code (Opus 5.5, effort high). Each of the 126
+KernelBench seeds passed on its first attempt, except l1_006, l2_011 and l2_014. Those three
+failed four attempts against an inaccurate oracle and passed first time after the fixes in
+decision 12. Seeding cost $17.12 at list price. Geometric-mean speedup over eager at `bench-gpu`:
+
+| Problems | `torch.compile` | Seed | Seeds faster than eager | Seeds faster than compile |
+|---|---|---|---|---|
+| Inference (12) | 2.07× | 4.12× | 11 | 9 |
+| Level 1 (26) | 1.49× | 1.47× | 14 | 10 |
+| Level 2 (100) | 1.55× | 1.24× | 60 | 41 |
+
+Seven Level 2 seeds rewrite their problem algebraically: a GEMM or transposed convolution
+followed by a sum or a global pool becomes sums of the input and of the weights, recomputed on
+every call. Against the reference's FLOP count these seeds exceed the tensor peak, up to 8232
+TFLOPS for l2_077. Not done: Xe-Forge's test and vLLM kernels, and `max-autotune` baselines.
 
 ### Stage 3: knowledge base
 
