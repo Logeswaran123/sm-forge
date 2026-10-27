@@ -11,6 +11,11 @@ and the median of identical runs moved by 16%. The p20 of the same runs moved by
 
 ``Timer.compare`` times two calls in alternating rounds. Drift in clocks or temperature then
 lands on both arms, and identical code measures as parity instead of a speedup.
+
+Adapted from Xe-Forge (https://github.com/IntelLabs/Xe-Forge, Apache-2.0):
+``Timer.samples`` and ``Timer.compare`` follow ``_forward_samples`` and ``time_interleaved`` in
+its ``src/xe_forge/core/executor.py``. Modified for sm-forge: CUDA events, a configurable flush
+size, an optional flush, and quantile instead of median statistics.
 """
 
 from __future__ import annotations
