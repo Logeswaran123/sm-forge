@@ -38,6 +38,8 @@ class Session:
         torch.cuda.set_device(device)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+        torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
         self.device = torch.device("cuda", device)
         self.refs = ReferenceCache(cache_dir / "refs", self.device)
         self._timers: dict[str, Timer] = {}
