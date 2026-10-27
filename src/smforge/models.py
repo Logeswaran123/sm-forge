@@ -179,6 +179,18 @@ class Roofline(BaseModel):
         return peak * 1e3 / self.dram_read_gbps if peak else None
 
 
+class ReferenceProfile(BaseModel):
+    """One forward of a reference model: footprint, time, work, and whether its result holds up."""
+
+    peak_bytes: int
+    time_us: float
+    flop: float | None = None
+    bytes_moved: float
+    finite: bool
+    stable: bool | None = None
+    max_abs_error: float | None = None
+
+
 class NoiseCase(BaseModel):
     name: str
     time_us: float

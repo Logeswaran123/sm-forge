@@ -17,7 +17,14 @@ from typing import Any
 
 from smforge.config import Config, get_config
 from smforge.harness.tolerance import resolve_tolerance
-from smforge.models import CheckResult, Comparison, FactsReport, LaunchProfile, Timing
+from smforge.models import (
+    CheckResult,
+    Comparison,
+    FactsReport,
+    LaunchProfile,
+    ReferenceProfile,
+    Timing,
+)
 from smforge.spec import load_spec
 
 STDERR_TAIL = 4000
@@ -193,6 +200,36 @@ class Runner:
         variant = _resolve(spec, variant, index)[0]
         result = self.call("facts", kernel=str(kernel), **_workload(spec, variant, index))
         return FactsReport.model_validate(result)
+
+    def profile_reference(
+        self, reference: Path, *, spec: Path, variant: str | None = None, index: int = 0
+    ) -> ReferenceProfile:
+        variant = _resolve(spec, variant, index)[0]
+        result = self.call(
+            "profile_reference", reference=str(reference), **_workload(spec, variant, index)
+        )
+        return ReferenceProfile.model_validate(result)
+
+    def baseline(
+        self,
+        reference: Path,
+        mode: str,
+        *,
+        spec: Path | None = None,
+        variant: str | None = None,
+        index: int = 0,
+        timeout: float | None = None,
+    ) -> Timing:
+        variant = _resolve(spec, variant, index)[0]
+        result = self.call(
+            "baseline",
+            timeout=timeout,
+            reference=str(reference),
+            mode=mode,
+            timing=self.config.timing.model_dump(),
+            **_workload(spec, variant, index),
+        )
+        return Timing.model_validate(result)
 
 
 def _resolve(spec: Path | None, variant: str | None, index: int):

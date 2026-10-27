@@ -18,6 +18,8 @@ from typing import Any
 import torch
 
 from smforge.config import TimingConfig
+from smforge.corpus.kernelbench import verify
+from smforge.corpus.measure import compiled, profile_reference
 from smforge.device.noise import measure_noise
 from smforge.device.probes import PROBES, run_probe
 from smforge.device.query import query_device
@@ -28,6 +30,7 @@ from smforge.harness.launches import profile_launches, triton_names
 from smforge.harness.timing import Timer, graph_callable
 from smforge.harness.workload import Workload, clone, cuda_healthy, load_module
 from smforge.models import FactsReport, Timing
+from smforge.spec import load_spec
 
 
 class Session:
@@ -153,6 +156,31 @@ class Session:
 
     def op_noise(self, timing: dict) -> dict:
         return measure_noise(self.timer(timing), self.device).model_dump(mode="json")
+
+    def op_verify_translation(self, reference: str, spec: str, variant: str) -> None:
+        kernel_spec = load_spec(spec)
+        verify(Path(reference), kernel_spec, kernel_spec.variant(variant).dims)
+
+    def op_profile_reference(
+        self, reference: str, spec: str, variant: str | None = None, index: int = 0
+    ) -> dict:
+        workload = self.workload(spec, variant, index, reference)
+        return profile_reference(workload, load_module(reference)).model_dump(mode="json")
+
+    def op_baseline(
+        self,
+        reference: str,
+        mode: str,
+        timing: dict,
+        spec: str | None = None,
+        variant: str | None = None,
+        index: int = 0,
+    ) -> dict:
+        workload = self.workload(spec, variant, index, reference)
+        model = compiled(workload.build(load_module(reference)), mode)
+        inputs = clone(workload.inputs())
+        result = self.timer(timing).time(lambda: model(*inputs))
+        return _rates(result, workload, False).model_dump(mode="json")
 
 
 def _rates(timing: Timing, workload: Workload, graph: bool) -> Timing:

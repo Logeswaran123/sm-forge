@@ -156,11 +156,12 @@ class Workload:
             )
         ]
 
-    def build(self, module: ModuleType) -> nn.Module:
+    def build(self, module: ModuleType, dtype: torch.dtype | None = None) -> nn.Module:
         set_seed(INIT_SEED)
         model = module.Model(*self.init_args()).to(self.device).eval()
-        if self.dtype in CASTABLE:
-            model = model.to(self.dtype)
+        dtype = dtype or self.dtype
+        if dtype in CASTABLE:
+            model = model.to(dtype)
         return model
 
     def key(self) -> str:
