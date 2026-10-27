@@ -25,6 +25,13 @@ class CorrectnessConfig(BaseModel):
     draws: int = 2
 
 
+class LLMConfig(BaseModel):
+    model: str = "claude-opus-5-5"
+    effort: str = "high"
+    max_tokens: int = 64000
+    budget_usd: float | None = None
+
+
 class Config(BaseModel):
     device: int = 0
     worker_timeout: float = 600.0
@@ -32,6 +39,7 @@ class Config(BaseModel):
     hardware_dir: Path = Path("hardware")
     timing: TimingConfig = Field(default_factory=TimingConfig)
     correctness: CorrectnessConfig = Field(default_factory=CorrectnessConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
 
     @classmethod
     def from_env(cls) -> Config:
@@ -58,6 +66,14 @@ class Config(BaseModel):
                     rtol=("CORRECTNESS_RTOL", float),
                     atol=("CORRECTNESS_ATOL", float),
                     draws=("CORRECTNESS_DRAWS", int),
+                )
+            ),
+            llm=LLMConfig(
+                **_read(
+                    model=("LLM_MODEL", str),
+                    effort=("LLM_EFFORT", str),
+                    max_tokens=("LLM_MAX_TOKENS", int),
+                    budget_usd=("LLM_BUDGET_USD", float),
                 )
             ),
         )

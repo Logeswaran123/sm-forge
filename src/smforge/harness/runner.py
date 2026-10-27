@@ -144,7 +144,8 @@ class Runner:
                 **_workload(spec, variant, index),
             )
         except WorkerError as e:
-            return CheckResult(passed=False, rtol=rtol, atol=atol, error=str(e))
+            error = f"{e}\n{_tail(e.detail)}" if e.fatal and e.detail else str(e)
+            return CheckResult(passed=False, rtol=rtol, atol=atol, error=error)
         return CheckResult.model_validate(result)
 
     def launches(
@@ -239,6 +240,10 @@ def _resolve(spec: Path | None, variant: str | None, index: int):
     kernel_spec = load_spec(spec)
     entry = kernel_spec.variant(variant, index)
     return kernel_spec.resolve(variant), kernel_spec.dtype(entry), entry
+
+
+def _tail(text: str, lines: int = 20) -> str:
+    return "\n".join(text.strip().splitlines()[-lines:])
 
 
 def _workload(spec: Path | None, variant: str | None, index: int) -> dict:

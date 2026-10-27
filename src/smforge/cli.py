@@ -7,9 +7,11 @@ import logging
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from smforge import render
+from smforge.agents.seed import seed_problem
 from smforge.config import get_config
 from smforge.corpus.build import import_kernelbench
 from smforge.corpus.catalog import (
@@ -22,9 +24,10 @@ from smforge.corpus.catalog import (
 )
 from smforge.corpus.kernelbench import LEVEL1, Untranslatable, problem_id, problem_number
 from smforge.corpus.results import provenance, upsert
-from smforge.device.profile import load_profile, profile_path, save_profile
+from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
+from smforge.llm.client import BudgetExceeded, LLMClient, Refused
 from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline
 from smforge.spec import load_spec
 
@@ -81,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--compile-timeout", type=float, default=1800, help="seconds allowed per compile"
     )
     baselines.set_defaults(func=cmd_baselines)
+
+    seed = commands.add_parser("seed", help="write a seed kernel for corpus problems with the LLM")
+    seed.add_argument("--ids", help="comma-separated problem ids")
+    seed.add_argument("--source", help="only problems from this source (kernelbench, inference)")
+    seed.add_argument("--split", choices=("dev", "eval"))
+    seed.add_argument("--max-iters", type=int, default=4, help="attempts per problem")
+    seed.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    seed.add_argument("--force", action="store_true", help="replace existing seeds")
+    seed.set_defaults(func=cmd_seed)
     return parser
 
 
@@ -163,13 +175,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 
 def cmd_baselines(args: argparse.Namespace) -> int:
-    problems = load_problems()
-    if args.ids:
-        wanted = set(args.ids.split(","))
-        problems = [p for p in problems if p.id in wanted]
-    if args.split:
-        members = set(load_splits().get(args.split, []))
-        problems = [p for p in problems if p.id in members]
+    problems = _select(load_problems(), args)
     modes = args.modes.split(",")
     failures = 0
     with Runner() as runner:
@@ -209,6 +215,53 @@ def _baseline(runner: Runner, problem: Problem, mode: str, args: argparse.Namesp
         return runner.bench(problem.seed, **workload) if problem.seed.exists() else None
     timeout = args.compile_timeout if mode != "eager" else None
     return runner.baseline(problem.reference, mode, timeout=timeout, **workload)
+
+
+def cmd_seed(args: argparse.Namespace) -> int:
+    config = get_config()
+    if args.budget_usd is not None:
+        config.llm.budget_usd = args.budget_usd
+    problems = _select(load_problems(), args)
+    if not args.force:
+        problems = [p for p in problems if not p.seed.exists()]
+    run = time.strftime("%Y%m%d-%H%M%S")
+    llm = LLMClient(config.llm, transcripts=config.cache_dir / "transcripts" / run)
+    profile = find_profile(config.hardware_dir, config.device)
+    seeded = 0
+    with Runner(config) as runner:
+        for problem in problems:
+            workdir = config.cache_dir / "seeds" / run / problem.id
+            try:
+                result = seed_problem(problem, runner, llm, profile, args.max_iters, workdir)
+            except BudgetExceeded as e:
+                print(f"stopping: {e}", flush=True)
+                break
+            except Refused as e:
+                print(f"{problem.id}: REFUSED {e}", flush=True)
+                continue
+            cost = f"${result.usage.cost_usd:.2f}"
+            if result.passed:
+                seeded += 1
+                print(f"{problem.id}: seeded in {len(result.attempts)} ({cost})", flush=True)
+            else:
+                last = result.attempts[-1].feedback.splitlines()[0] if result.attempts else ""
+                print(f"{problem.id}: FAILED after {len(result.attempts)} ({cost}): {last}")
+    print(
+        f"seeded {seeded} of {len(problems)}; spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
+    )
+    return 0 if seeded == len(problems) else 1
+
+
+def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:
+    if getattr(args, "ids", None):
+        wanted = set(args.ids.split(","))
+        problems = [p for p in problems if p.id in wanted]
+    if getattr(args, "source", None):
+        problems = [p for p in problems if p.source == args.source]
+    if getattr(args, "split", None):
+        members = set(load_splits().get(args.split, []))
+        problems = [p for p in problems if p.id in members]
+    return problems
 
 
 def _probe(runner: Runner, name: str) -> ProbeResult:
