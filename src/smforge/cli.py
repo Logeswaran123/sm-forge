@@ -27,7 +27,8 @@ from smforge.corpus.results import provenance, upsert
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
-from smforge.llm.client import BudgetExceeded, LLMClient, MissingCredentials, Refused
+from smforge.llm.claude_code import ClaudeCodeError
+from smforge.llm.client import BudgetExceeded, MissingCredentials, Refused, create_client
 from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline
 from smforge.spec import load_spec
 
@@ -93,6 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--max-iters", type=int, default=4, help="attempts per problem")
     seed.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
     seed.add_argument("--force", action="store_true", help="replace existing seeds")
+    seed.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    seed.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
     seed.set_defaults(func=cmd_seed)
     return parser
 
@@ -222,11 +225,15 @@ def cmd_seed(args: argparse.Namespace) -> int:
     config = get_config()
     if args.budget_usd is not None:
         config.llm.budget_usd = args.budget_usd
+    if args.backend:
+        config.llm.backend = args.backend
+    if args.claude_bin:
+        config.llm.claude_bin = args.claude_bin
     problems = _select(load_problems(), args)
     if not args.force:
         problems = [p for p in problems if not p.seed.exists()]
     run = time.strftime("%Y%m%d-%H%M%S")
-    llm = LLMClient(config.llm, transcripts=config.cache_dir / "transcripts" / run)
+    llm = create_client(config.llm, transcripts=config.cache_dir / "transcripts" / run)
     profile = find_profile(config.hardware_dir, config.device)
     seeded = 0
     with Runner(config) as runner:
@@ -237,7 +244,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
             except BudgetExceeded as e:
                 print(f"stopping: {e}", flush=True)
                 break
-            except MissingCredentials as e:
+            except (MissingCredentials, ClaudeCodeError) as e:
                 print(e, file=sys.stderr)
                 return 2
             except Refused as e:

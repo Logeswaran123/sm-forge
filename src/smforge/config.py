@@ -26,6 +26,8 @@ class CorrectnessConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
+    backend: str = "api"
+    claude_bin: str | None = None
     model: str = "claude-opus-5-5"
     effort: str = "high"
     max_tokens: int = 64000
@@ -70,6 +72,8 @@ class Config(BaseModel):
             ),
             llm=LLMConfig(
                 **_read(
+                    backend=("LLM_BACKEND", str),
+                    claude_bin=("CLAUDE_BIN", str),
                     model=("LLM_MODEL", str),
                     effort=("LLM_EFFORT", str),
                     max_tokens=("LLM_MAX_TOKENS", int),

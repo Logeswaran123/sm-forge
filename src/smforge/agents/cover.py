@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from smforge.llm.client import LLMClient, Usage
+from smforge.llm.client import Completer, Usage
 
 _CODE_BLOCK = re.compile(r"```(?:python|py)\n(.*?)```", re.DOTALL)
 NO_CODE = "The reply has no ```python block. Reply with the complete file in one ```python block."
@@ -42,7 +42,7 @@ def extract_code(text: str) -> str | None:
     return blocks[-1] if blocks else None
 
 
-def cover(llm: LLMClient, system: str, task: str, verify: Verifier, max_iters: int) -> CoverResult:
+def cover(llm: Completer, system: str, task: str, verify: Verifier, max_iters: int) -> CoverResult:
     """Up to ``max_iters`` attempts; ``verify(code, attempt)`` returns ``(passed, feedback)``."""
     result = CoverResult(code=None)
     messages: list[dict] = [{"role": "user", "content": task}]

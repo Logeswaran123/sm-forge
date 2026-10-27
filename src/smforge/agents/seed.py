@@ -22,7 +22,7 @@ from smforge.harness.audit import audit_launches, audit_source
 from smforge.harness.runner import Runner
 from smforge.harness.static import validate_source
 from smforge.harness.tolerance import resolve_tolerance
-from smforge.llm.client import LLMClient
+from smforge.llm.client import Completer
 from smforge.models import CheckResult, DeviceProfile, Severity
 from smforge.spec import KernelSpec, load_spec
 
@@ -100,7 +100,7 @@ def verifier(problem: Problem, spec: KernelSpec, runner: Runner, workdir: Path) 
 def seed_problem(
     problem: Problem,
     runner: Runner,
-    llm: LLMClient,
+    llm: Completer,
     profile: DeviceProfile | None,
     max_iters: int,
     workdir: Path,
@@ -132,7 +132,7 @@ def _check_feedback(variant: str, result: CheckResult) -> str:
     return text
 
 
-def _write_provenance(problem: Problem, llm: LLMClient, result: CoverResult) -> None:
+def _write_provenance(problem: Problem, llm: Completer, result: CoverResult) -> None:
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
     ).stdout.strip()

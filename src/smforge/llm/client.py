@@ -12,7 +12,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import anthropic
 from pydantic import BaseModel
@@ -49,6 +49,13 @@ class Reply(BaseModel):
     usage: Usage
 
 
+class Completer(Protocol):
+    config: LLMConfig
+    usage: Usage
+
+    def complete(self, system: str, messages: list[dict]) -> Reply: ...
+
+
 class Refused(RuntimeError):
     pass
 
@@ -69,10 +76,7 @@ class LLMClient:
         self._client: anthropic.Anthropic | None = None
 
     def complete(self, system: str, messages: list[dict]) -> Reply:
-        if self.config.budget_usd is not None and self.usage.cost_usd >= self.config.budget_usd:
-            raise BudgetExceeded(
-                f"spent ${self.usage.cost_usd:.2f} of the ${self.config.budget_usd:.2f} budget"
-            )
+        check_budget(self.config, self.usage)
         request = {
             "model": self.config.model,
             "max_tokens": self.config.max_tokens,
@@ -92,7 +96,7 @@ class LLMClient:
             usage=_usage(message.usage, message.model, self.config.model),
         )
         self.usage.add(reply.usage)
-        self._record(request, reply)
+        record_transcript(self.transcripts, request, reply)
         if reply.stop_reason == "refusal":
             raise Refused(f"{message.model} declined: {message.stop_details}")
         return reply
@@ -112,18 +116,34 @@ class LLMClient:
                 "no Anthropic credentials: set ANTHROPIC_API_KEY in .env or run `ant auth login`"
             ) from e
 
-    def _record(self, request: dict, reply: Reply) -> None:
-        if self.transcripts is None:
-            return
-        self.transcripts.mkdir(parents=True, exist_ok=True)
-        body = json.dumps(_jsonable(request), sort_keys=True)
-        key = hashlib.sha256(body.encode()).hexdigest()[:12]
-        path = self.transcripts / f"{time.strftime('%Y%m%d-%H%M%S')}-{key}.json"
-        record = {
-            "request": _jsonable(request),
-            "reply": {**reply.model_dump(mode="json", exclude={"content"}), "text": reply.text},
-        }
-        path.write_text(json.dumps(record, indent=1))
+
+def create_client(config: LLMConfig, transcripts: Path | None = None) -> Completer:
+    if config.backend == "claude-code":
+        from smforge.llm.claude_code import ClaudeCodeClient
+
+        return ClaudeCodeClient(config, transcripts)
+    if config.backend != "api":
+        raise ValueError(f"unknown LLM backend {config.backend!r}; expected api or claude-code")
+    return LLMClient(config, transcripts)
+
+
+def check_budget(config: LLMConfig, usage: Usage) -> None:
+    if config.budget_usd is not None and usage.cost_usd >= config.budget_usd:
+        raise BudgetExceeded(f"spent ${usage.cost_usd:.2f} of the ${config.budget_usd:.2f} budget")
+
+
+def record_transcript(directory: Path | None, request: dict, reply: Reply) -> None:
+    if directory is None:
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(_jsonable(request), sort_keys=True)
+    key = hashlib.sha256(body.encode()).hexdigest()[:12]
+    path = directory / f"{time.strftime('%Y%m%d-%H%M%S')}-{key}.json"
+    record = {
+        "request": _jsonable(request),
+        "reply": {**reply.model_dump(mode="json", exclude={"content"}), "text": reply.text},
+    }
+    path.write_text(json.dumps(record, indent=1))
 
 
 def _usage(usage: Any, served_by: str, requested: str) -> Usage:
