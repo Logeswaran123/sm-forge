@@ -1,0 +1,133 @@
+device:
+  index: 0
+  name: NVIDIA GeForce RTX 5080
+  capability:
+  - 12
+  - 0
+  sm_count: 84
+  memory_bytes: 17066033152
+  l2_bytes: 67108864
+  smem_per_block: 101376
+  smem_per_sm: 102400
+  regs_per_sm: 65536
+  max_threads_per_sm: 1536
+  max_ctas_per_sm: 24
+  warp_size: 32
+  memory_bus_bits: 256
+  max_sm_clock_mhz: 3090
+  max_memory_clock_mhz: 15001
+  power_limit_w: 400.0
+  driver: '617.42'
+  cuda: '12.8'
+  torch: 2.11.0+cu128
+  triton: 3.6.0
+  wsl: true
+probes:
+- name: mma_fp16
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    HMMA: 112
+  error: null
+- name: mma_bf16
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    HMMA: 112
+  error: null
+- name: mma_tf32
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    HMMA: 32
+  error: null
+- name: mma_fp8
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    QMMA: 8
+  error: null
+- name: cp_async
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    LDGSTS: 12
+    HMMA: 16
+  error: null
+- name: tma_host
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    UTMALDG: 6
+    HMMA: 16
+    UTMASTG: 1
+  error: null
+- name: tma_device
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    UTMALDG: 6
+    HMMA: 16
+    UTMASTG: 1
+  error: null
+- name: dot_scaled
+  compiled: true
+  lowered: true
+  correct: true
+  instructions:
+    QMMA: 128
+  error: null
+- name: warp_specialize
+  compiled: false
+  lowered: null
+  correct: null
+  instructions: {}
+  error: 'RuntimeError: PassManager::run failed'
+roofline:
+  dram_copy_gbps: 755.237156975341
+  dram_read_gbps: 885.4579943911741
+  l2_copy_gbps: 2781.3687785804427
+  tflops:
+    float16: 116.20583042296833
+    bfloat16: 109.09273746855891
+    float32: 37.83678771850582
+    tf32: 52.82789637580755
+    float8_e4m3fn: 234.18577367904734
+noise:
+  cases:
+  - name: launch_bound
+    time_us: 3.903999924659729
+    deviation: 0.008264465791663511
+    spread: 0.02459017273362263
+  - name: memory_bound
+    time_us: 632.8639984130859
+    deviation: 0.0
+    spread: 0.0034272256923921773
+  - name: compute_bound
+    time_us: 1189.8560523986816
+    deviation: 2.68496611331992e-05
+    spread: 0.0018524437816016537
+  min_effect: 0.017
+tools:
+- name: ncu
+  path: /usr/local/cuda-12.8/bin/ncu
+  ok: false
+  detail: ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU
+    Performance Counters on the target device 0. For instructions on enabling permissions
+    and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+- name: nsys
+  path: /usr/local/cuda-12.8/bin/nsys
+  ok: true
+  detail: ''
+- name: compute-sanitizer
+  path: /usr/local/cuda-12.8/bin/compute-sanitizer
+  ok: false
+  detail: 'Error: Failed to initialize WDDM debugger interface. Please run EnableDebuggerInterface.bat
+    as an administrator'
