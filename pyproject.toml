@@ -1,6 +1,6 @@
 [project]
 name = "sm-forge"
-version = "0.2.0"
+version = "0.2.1"
 description = "Multi-stage LLM-driven optimization of Triton kernels for NVIDIA GPUs"
 readme = "README.md"
 requires-python = ">=3.11"
