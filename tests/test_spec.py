@@ -3,37 +3,28 @@ import yaml
 
 from smforge.spec import evaluate, parse_spec
 
-XE_FORGE_SPEC = """
+CONV_SPEC = """
 inputs:
   X:
-    shape: [BATCH, INPUT_SIZE]
-    dtype: float16
+    shape: [N, C_IN, H, W]
+    dtype: bfloat16
 
 inits:
-  - dim: INPUT_SIZE
-  - dim: HIDDEN_SIZE
-  - dim: OUTPUT_SIZE
+  - in_channels: C_IN
+  - out_channels: C_OUT
+  - kernel_size: KS
 
 ci:
   - params: [X]
-    dtype: float16
-    dims:
-      BATCH: 16384
-      INPUT_SIZE: 2048
-      HIDDEN_SIZE: 4096
-      OUTPUT_SIZE: 1024
-    flop: "2*BATCH*HIDDEN_SIZE*INPUT_SIZE + 2*BATCH*OUTPUT_SIZE*HIDDEN_SIZE"
+    dtype: bfloat16
+    dims: {N: 3, C_IN: 5, C_OUT: 7, H: 9, W: 11, KS: 3}
 
 bench-gpu:
   - params: [X]
-    dtype: float16
-    dims:
-      BATCH: 8
-      INPUT_SIZE: 16
-      HIDDEN_SIZE: 32
-      OUTPUT_SIZE: 4
-    flop: "2*BATCH*HIDDEN_SIZE*INPUT_SIZE + 2*BATCH*OUTPUT_SIZE*HIDDEN_SIZE"
-    rtol: 1e-2
+    dtype: bfloat16
+    dims: {N: 4, C_IN: 8, C_OUT: 16, H: 10, W: 12, KS: 3}
+    flop: "2*N*C_OUT*(H - KS + 1)*(W - KS + 1)*C_IN*KS*KS"
+    atol: 0.05
 """
 
 MOE_SPEC = """
@@ -54,15 +45,15 @@ decode:
 """
 
 
-def test_xe_forge_spec():
-    spec = parse_spec(yaml.safe_load(XE_FORGE_SPEC))
+def test_default_variant_is_bench_gpu():
+    spec = parse_spec(yaml.safe_load(CONV_SPEC))
     assert sorted(spec.variants) == ["bench-gpu", "ci"]
     variant = spec.variant()
-    assert spec.input_shapes(variant) == [(8, 16)]
-    assert spec.init_args(variant) == [16, 32, 4]
-    assert spec.flop(variant) == 2 * 8 * 32 * 16 + 2 * 8 * 4 * 32
-    assert variant.rtol == pytest.approx(1e-2)
-    assert spec.dtype(variant) == "float16"
+    assert spec.input_shapes(variant) == [(4, 8, 10, 12)]
+    assert spec.init_args(variant) == [8, 16, 3]
+    assert spec.flop(variant) == 2 * 4 * 16 * 8 * 10 * 8 * 3 * 3
+    assert variant.atol == pytest.approx(0.05)
+    assert spec.dtype(variant) == "bfloat16"
 
 
 def test_dtype_override_skips_integer_inputs():
