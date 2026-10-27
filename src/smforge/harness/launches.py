@@ -1,4 +1,9 @@
-"""The CUDA kernels one forward launches, from the PyTorch profiler (worker side)."""
+"""The CUDA kernels one forward launches, from the PyTorch profiler (worker side).
+
+On WSL2 the profiler stops recording CUDA activity about 40 s after a process first uses it, and
+does not recover. An empty profile therefore raises ``ProfilerUnavailable``, which ends the
+worker, instead of reading as a forward that launched nothing.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,10 @@ from triton.runtime.jit import JITFunction
 
 from smforge.harness.audit import classify_launch
 from smforge.models import Launch, LaunchProfile
+
+
+class ProfilerUnavailable(RuntimeError):
+    fatal = True
 
 
 def triton_names(module: ModuleType) -> set[str]:
@@ -39,6 +48,8 @@ def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -
                 fn()
             torch.cuda.synchronize()
         events = [e for e in prof.events() if e.device_type == DeviceType.CUDA]
+    if not events:
+        raise ProfilerUnavailable("the profiler recorded no CUDA activity")
     totals: dict[str, list[float]] = defaultdict(lambda: [0, 0.0])
     for event in events:
         totals[event.name][0] += 1

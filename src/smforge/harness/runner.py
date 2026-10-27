@@ -151,8 +151,19 @@ class Runner:
     def launches(
         self, kernel: Path, *, spec: Path | None = None, variant: str | None = None, index: int = 0
     ) -> LaunchProfile:
+        """Profile in a fresh worker; on WSL2 the profiler goes quiet in an older one.
+
+        An empty profile ends that worker, and the profile is retried once in a new one.
+        """
         variant = _resolve(spec, variant, index)[0]
-        result = self.call("launches", kernel=str(kernel), **_workload(spec, variant, index))
+        args = {"kernel": str(kernel), **_workload(spec, variant, index)}
+        self.close()
+        try:
+            result = self.call("launches", **args)
+        except WorkerError as e:
+            if not str(e).startswith("ProfilerUnavailable"):
+                raise
+            result = self.call("launches", **args)
         return LaunchProfile.model_validate(result)
 
     def bench(

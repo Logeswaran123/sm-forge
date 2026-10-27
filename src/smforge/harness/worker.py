@@ -206,7 +206,7 @@ def serve(session: Session, requests, replies) -> None:
                 ok=False,
                 error=f"{type(e).__name__}: {e}".strip(),
                 traceback=traceback.format_exc(),
-                fatal=not cuda_healthy(),
+                fatal=getattr(e, "fatal", False) or not cuda_healthy(),
             )
         replies.write(json.dumps(reply) + "\n")
         replies.flush()

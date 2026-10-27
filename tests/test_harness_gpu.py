@@ -144,3 +144,28 @@ def test_timeout_restarts_worker(runner):
         )
     assert error.value.fatal
     assert runner.call("ping")["pid"] != pid
+
+
+def test_empty_profile_is_an_error():
+    from smforge.harness.launches import ProfilerUnavailable, profile_launches
+
+    with pytest.raises(ProfilerUnavailable):
+        profile_launches(lambda: None, set())
+
+
+def test_launches_survive_an_old_worker(runner, monkeypatch):
+    calls = []
+    original = runner.call
+
+    def call(op, **args):
+        calls.append(op)
+        if op == "launches" and calls.count("launches") == 1:
+            raise WorkerError(
+                "ProfilerUnavailable: the profiler recorded no CUDA activity", fatal=True
+            )
+        return original(op, **args)
+
+    monkeypatch.setattr(runner, "call", call)
+    profile = runner.launches(KERNEL, spec=SPEC, variant="ci")
+    assert calls.count("launches") == 2
+    assert profile.launches[0].category is LaunchCategory.TRITON
