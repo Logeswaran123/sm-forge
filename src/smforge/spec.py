@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import operator
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -61,7 +62,7 @@ class AuditSpec(BaseModel):
 
 class KernelSpec(BaseModel):
     inputs: dict[str, InputSpec] = Field(default_factory=dict)
-    inits: list[dict[str, str | int | float]] = Field(default_factory=list)
+    inits: list[dict[str, Any]] = Field(default_factory=list)
     variants: dict[str, list[Variant]] = Field(default_factory=dict)
     default_variant: str | None = None
     audit: AuditSpec = Field(default_factory=AuditSpec)
@@ -107,20 +108,31 @@ class KernelSpec(BaseModel):
         return floats[0] if floats else "float32"
 
     def init_args(self, variant: Variant) -> list:
-        args = []
-        for entry in self.inits:
-            for value in entry.values():
-                if isinstance(value, str) and value in variant.dims:
-                    args.append(variant.dims[value])
-                else:
-                    args.append(value)
-        return args
+        """``Model.__init__`` arguments. Dim names resolve, also inside lists, which become tuples."""
+        return [_init_value(v, variant.dims) for entry in self.inits for v in entry.values()]
 
     def flop(self, variant: Variant) -> float | None:
         return evaluate(variant.flop, variant.dims)
 
     def bytes_moved(self, variant: Variant) -> float | None:
         return evaluate(variant.bytes, variant.dims)
+
+
+class _SpecDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_list(dumper: yaml.SafeDumper, data: list) -> yaml.Node:
+    flow = all(not isinstance(item, list | dict) for item in data)
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow)
+
+
+_SpecDumper.add_representer(list, _represent_list)
+
+
+def dump_spec(document: dict) -> str:
+    """YAML for a spec, with shapes and other flat lists on one line."""
+    return yaml.dump(document, Dumper=_SpecDumper, sort_keys=False)
 
 
 def load_spec(path: str | Path) -> KernelSpec:
@@ -166,6 +178,14 @@ def _eval(node: ast.expr, dims: dict[str, int]) -> float:
         case ast.Call(func=ast.Name(id=name), args=args) if name in _FUNCTIONS:
             return _FUNCTIONS[name](*(_eval(a, dims) for a in args))
     raise ValueError(f"unsupported formula expression: {ast.unparse(node)}")
+
+
+def _init_value(value: Any, dims: dict[str, int]) -> Any:
+    if isinstance(value, str):
+        return dims.get(value, value)
+    if isinstance(value, list):
+        return tuple(_init_value(v, dims) for v in value)
+    return value
 
 
 def _dim(value: str | float, dims: dict[str, int]) -> float:

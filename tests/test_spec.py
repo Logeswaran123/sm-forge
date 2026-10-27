@@ -43,6 +43,8 @@ inputs:
 inits:
   - experts: E
   - quant: none
+  - bias_shape: [E, 1, 1]
+  - scale: 0.5
 default_variant: decode
 decode:
   - params: [A, topk_ids]
@@ -69,7 +71,7 @@ def test_dtype_override_skips_integer_inputs():
     assert spec.resolve() == "decode"
     assert spec.input_dtypes(variant) == ["float16", "int32"]
     assert spec.input_ranges(variant) == [None, (0, 8)]
-    assert spec.init_args(variant) == [8, "none"]
+    assert spec.init_args(variant) == [8, "none", (8, 1, 1), 0.5]
     assert spec.bytes_moved(variant) == 2 * 4 * 64 + 4 * 4 * 2
     assert spec.flop(variant) is None
 
