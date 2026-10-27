@@ -24,6 +24,8 @@ COMPILE_MODES = {
 def profile_reference(workload: Workload, module: ModuleType) -> ReferenceProfile:
     """Footprint, time, FLOPs and bytes of one forward at the variant's dtype.
 
+    FLOPs are left out when PyTorch's counter rejects an op, as it does grouped-query attention.
+
     For a dtype below float32 the same weights and inputs also run in float32. ``stable`` says
     whether the low-precision result stays within that dtype's default tolerance of the float32
     one; when it does not, an accurate kernel would fail against the low-precision oracle.
@@ -33,7 +35,12 @@ def profile_reference(workload: Workload, module: ModuleType) -> ReferenceProfil
     torch.cuda.reset_peak_memory_stats()
     model = workload.build(module)
     inputs = workload.inputs()
-    with FlopCounterMode(display=False) as counter:
+    flop = None
+    try:
+        with FlopCounterMode(display=False) as counter:
+            output = model(*inputs)
+        flop = counter.get_total_flops() or None
+    except AssertionError:
         output = model(*inputs)
     torch.cuda.synchronize()
     peak = torch.cuda.max_memory_allocated()
@@ -43,7 +50,7 @@ def profile_reference(workload: Workload, module: ModuleType) -> ReferenceProfil
     profile = ReferenceProfile(
         peak_bytes=peak,
         time_us=_time(lambda: model(*inputs)),
-        flop=counter.get_total_flops() or None,
+        flop=flop,
         bytes_moved=sum(t.numel() * t.element_size() for t in tensors),
         finite=finite,
     )

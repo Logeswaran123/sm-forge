@@ -119,7 +119,8 @@ class KernelSpec(BaseModel):
 
 
 class _SpecDumper(yaml.SafeDumper):
-    pass
+    def ignore_aliases(self, data) -> bool:
+        return True
 
 
 def _represent_list(dumper: yaml.SafeDumper, data: list) -> yaml.Node:
