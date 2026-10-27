@@ -1,0 +1,5 @@
+id: inf_fp8_gemm_tensorwise
+source: inference
+family: gemm_fp8
+notes:
+- e4m3 activations and weights, one scale each

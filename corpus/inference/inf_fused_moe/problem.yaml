@@ -1,0 +1,5 @@
+id: inf_fused_moe
+source: inference
+family: moe
+notes:
+- 'Qwen3-30B-A3B MoE layer shapes: 128 experts, top 8, normalized top-k weights'

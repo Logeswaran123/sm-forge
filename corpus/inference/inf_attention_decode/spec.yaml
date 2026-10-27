@@ -1,0 +1,32 @@
+inputs:
+  q:
+    shape: [B, HQ, 1, D]
+    dtype: bfloat16
+  k_cache:
+    shape: [B, HKV, L, D]
+    dtype: bfloat16
+  v_cache:
+    shape: [B, HKV, L, D]
+    dtype: bfloat16
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [q, k_cache, v_cache]
+  dims:
+    B: 32
+    HQ: 32
+    HKV: 8
+    L: 4096
+    D: 128
+  flop: 4*B*HQ*L*D
+  bytes: 4*B*HQ*D + 4*B*HKV*L*D
+ci:
+- params: [q, k_cache, v_cache]
+  dims:
+    B: 3
+    HQ: 32
+    HKV: 8
+    L: 100
+    D: 128
+  flop: 4*B*HQ*L*D
+  bytes: 4*B*HQ*D + 4*B*HKV*L*D

@@ -1,0 +1,5 @@
+id: inf_attention_prefill
+source: inference
+family: attention
+notes:
+- Llama-3-8B shapes, causal GQA prefill

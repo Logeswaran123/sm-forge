@@ -1,0 +1,20 @@
+inputs:
+  x:
+    shape: [T, H]
+    dtype: bfloat16
+inits:
+- hidden_size: H
+- eps: 1.0e-05
+default_variant: bench-gpu
+bench-gpu:
+- params: [x]
+  dims:
+    T: 4096
+    H: 4096
+  bytes: 2*(2*T*H + H)
+ci:
+- params: [x]
+  dims:
+    T: 3
+    H: 4096
+  bytes: 2*(2*T*H + H)

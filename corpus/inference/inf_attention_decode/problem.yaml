@@ -1,0 +1,5 @@
+id: inf_attention_decode
+source: inference
+family: attention
+notes:
+- Llama-3-8B shapes, GQA decode over a contiguous KV cache

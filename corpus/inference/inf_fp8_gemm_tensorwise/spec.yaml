@@ -1,0 +1,28 @@
+inputs:
+  x:
+    shape: [M, K]
+    dtype: float8_e4m3fn
+inits:
+- in_features: K
+- out_features: N
+default_variant: bench-gpu
+bench-gpu:
+- params: [x]
+  dims:
+    M: 4096
+    N: 4096
+    K: 4096
+  flop: 2*M*N*K
+  bytes: M*K + N*K + 2*M*N
+  rtol: 0.02
+  atol: 0.02
+ci:
+- params: [x]
+  dims:
+    M: 33
+    N: 4096
+    K: 4096
+  flop: 2*M*N*K
+  bytes: M*K + N*K + 2*M*N
+  rtol: 0.02
+  atol: 0.02

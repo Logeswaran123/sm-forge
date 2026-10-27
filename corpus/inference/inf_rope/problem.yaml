@@ -1,0 +1,5 @@
+id: inf_rope
+source: inference
+family: rope
+notes:
+- Llama-3-8B shapes, rope theta 500000, neox layout

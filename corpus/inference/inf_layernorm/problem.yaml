@@ -1,0 +1,5 @@
+id: inf_layernorm
+source: inference
+family: norm
+notes:
+- hidden 4096

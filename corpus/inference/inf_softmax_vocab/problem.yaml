@@ -1,0 +1,5 @@
+id: inf_softmax_vocab
+source: inference
+family: softmax
+notes:
+- Llama-3 vocabulary 128256, sampling batch 256

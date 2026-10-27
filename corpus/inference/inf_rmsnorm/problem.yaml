@@ -1,0 +1,5 @@
+id: inf_rmsnorm
+source: inference
+family: norm
+notes:
+- Llama-3-8B shapes

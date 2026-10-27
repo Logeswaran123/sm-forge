@@ -1,0 +1,34 @@
+inputs:
+  positions:
+    shape: [T]
+    dtype: int64
+    range: [0, MAX_POSITION]
+  q:
+    shape: [T, HQ, D]
+    dtype: bfloat16
+  k:
+    shape: [T, HKV, D]
+    dtype: bfloat16
+inits:
+- head_dim: D
+- max_position: MAX_POSITION
+- base: 500000.0
+default_variant: bench-gpu
+bench-gpu:
+- params: [positions, q, k]
+  dims:
+    T: 4096
+    HQ: 32
+    HKV: 8
+    D: 128
+    MAX_POSITION: 8192
+  bytes: 4*T*(HQ + HKV)*D + 2*T*D + 8*T
+ci:
+- params: [positions, q, k]
+  dims:
+    T: 3
+    HQ: 32
+    HKV: 8
+    D: 128
+    MAX_POSITION: 8192
+  bytes: 4*T*(HQ + HKV)*D + 2*T*D + 8*T

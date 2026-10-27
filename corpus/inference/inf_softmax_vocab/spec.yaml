@@ -1,0 +1,18 @@
+inputs:
+  logits:
+    shape: [B, V]
+    dtype: bfloat16
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [logits]
+  dims:
+    B: 256
+    V: 128256
+  bytes: 6*B*V
+ci:
+- params: [logits]
+  dims:
+    B: 3
+    V: 128256
+  bytes: 6*B*V

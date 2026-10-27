@@ -1,0 +1,5 @@
+id: inf_paged_attention_decode
+source: inference
+family: attention
+notes:
+- Llama-3-8B shapes, paged KV cache with block size 16; sequence lengths drawn uniformly

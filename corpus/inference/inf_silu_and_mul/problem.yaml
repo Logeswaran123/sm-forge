@@ -1,0 +1,5 @@
+id: inf_silu_and_mul
+source: inference
+family: activation
+notes:
+- Llama-3-8B shapes, intermediate 14336

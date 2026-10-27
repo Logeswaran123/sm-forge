@@ -1,0 +1,30 @@
+inputs:
+  x:
+    shape: [T, H]
+    dtype: bfloat16
+inits:
+- hidden_size: H
+- intermediate_size: I
+- num_experts: E
+- top_k: TOPK
+default_variant: bench-gpu
+bench-gpu:
+- params: [x]
+  dims:
+    T: 1024
+    H: 2048
+    I: 768
+    E: 128
+    TOPK: 8
+  flop: 6*T*TOPK*H*I + 2*T*E*H
+  bytes: 6*E*H*I + 4*T*H + 2*E*H
+ci:
+- params: [x]
+  dims:
+    T: 5
+    H: 2048
+    I: 768
+    E: 128
+    TOPK: 8
+  flop: 6*T*TOPK*H*I + 2*T*E*H
+  bytes: 6*E*H*I + 4*T*H + 2*E*H

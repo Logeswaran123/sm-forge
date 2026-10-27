@@ -1,0 +1,46 @@
+inputs:
+  q:
+    shape: [B, HQ, D]
+    dtype: bfloat16
+  key_cache:
+    shape: [NUM_BLOCKS, BLOCK_SIZE, HKV, D]
+    dtype: bfloat16
+  value_cache:
+    shape: [NUM_BLOCKS, BLOCK_SIZE, HKV, D]
+    dtype: bfloat16
+  block_tables:
+    shape: [B, MAX_BLOCKS]
+    dtype: int32
+    range: [0, NUM_BLOCKS]
+  seq_lens:
+    shape: [B]
+    dtype: int32
+    range: [1, CONTEXT]
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [q, key_cache, value_cache, block_tables, seq_lens]
+  dims:
+    B: 32
+    HQ: 32
+    HKV: 8
+    D: 128
+    NUM_BLOCKS: 8192
+    BLOCK_SIZE: 16
+    MAX_BLOCKS: 256
+    CONTEXT: 4096
+  flop: 2*B*HQ*CONTEXT*D
+  bytes: 4*B*HQ*D + 2*B*CONTEXT*HKV*D + 4*B*MAX_BLOCKS
+ci:
+- params: [q, key_cache, value_cache, block_tables, seq_lens]
+  dims:
+    B: 3
+    HQ: 32
+    HKV: 8
+    D: 128
+    NUM_BLOCKS: 64
+    BLOCK_SIZE: 16
+    MAX_BLOCKS: 10
+    CONTEXT: 160
+  flop: 2*B*HQ*CONTEXT*D
+  bytes: 4*B*HQ*D + 2*B*CONTEXT*HKV*D + 4*B*MAX_BLOCKS

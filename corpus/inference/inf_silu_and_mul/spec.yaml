@@ -1,0 +1,18 @@
+inputs:
+  x:
+    shape: [T, I2]
+    dtype: bfloat16
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [x]
+  dims:
+    T: 2048
+    I2: 28672
+  bytes: 3*T*I2
+ci:
+- params: [x]
+  dims:
+    T: 3
+    I2: 28672
+  bytes: 3*T*I2
