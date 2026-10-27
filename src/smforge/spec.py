@@ -16,6 +16,14 @@ from pydantic import BaseModel, Field
 FLOAT_DTYPES = frozenset(
     {"float64", "float32", "float16", "bfloat16", "float8_e4m3fn", "float8_e5m2"}
 )
+DTYPE_BYTES = {
+    "float64": 8,
+    "float32": 4,
+    "float16": 2,
+    "bfloat16": 2,
+    "float8_e4m3fn": 1,
+    "float8_e5m2": 1,
+}
 DEFAULT_VARIANT = "bench-gpu"
 _RESERVED = frozenset({"inputs", "inits", "default_variant", "audit"})
 
