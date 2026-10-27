@@ -119,13 +119,23 @@ torch 2.11.0+cu128, triton 3.6.0; CUDA 12.8 toolkit with ncu, nsys, compute-sani
 | Max SM clock | 3090 MHz |
 | Driver | 617.42, Windows host, WSL2 guest |
 
-Verified in stage 0 rather than assumed:
+Measured in stage 0 (`smforge device --all`, saved to `hardware/rtx5080.yaml`):
 
-- what Triton lowers `tl.dot` to on sm_120;
-- whether tensor descriptors lower to TMA (`UTMALDG` in SASS);
-- FP8 `tl.dot`, `tl.dot_scaled`, warp specialization and cluster launch;
-- achievable DRAM bandwidth and tensor throughput per dtype;
-- ncu counter access and clock locking under WSL2.
+| Item | Result |
+|---|---|
+| fp16, bf16, tf32 `tl.dot` | HMMA |
+| fp8 `tl.dot`, `tl.dot_scaled` (e4m3) | QMMA |
+| `num_stages > 1` | cp.async (LDGSTS) |
+| Tensor descriptors, host and device side | TMA (UTMALDG, UTMASTG) |
+| `tl.range(..., warp_specialize=True)` | compiler error, `PassManager::run failed` |
+| DRAM bandwidth | 885 GB/s read, 755 GB/s copy |
+| cuBLAS peak | fp16 116, bf16 109, tf32 53, fp32 38, fp8 234 TFLOPS |
+| A/A timing noise (p20) | under 1%; suggested min effect 1.7% |
+| nsys | works |
+| ncu | blocked: `ERR_NVGPUCTRPERM`, counters not enabled on the Windows side |
+| compute-sanitizer | blocked: WDDM debugger interface not enabled (`EnableDebuggerInterface.bat`) |
+
+Cluster launch and clock locking were not tested. Clock locking needs root.
 
 ## 3. Intel to NVIDIA mapping
 
@@ -169,8 +179,8 @@ Verified in stage 0 rather than assumed:
      `.metadata.shared`);
    - grid size and waves on 84 SMs;
    - SASS instruction mix (tensor-core MMA vs FFMA, cp.async, TMA), from `.asm["cubin"]` through
-     nvdisasm and the instruction-mix and occupancy code in `~/projects/optimizer-tool`
-     (cuda-breakdown);
+     nvdisasm;
+   - resident CTAs per SM from the driver's occupancy calculator;
    - arithmetic intensity from the spec's flop and byte formulas, against the measured ridge point;
    - an ncu Speed of Light summary, when counters are available.
 
@@ -208,6 +218,11 @@ Verified in stage 0 rather than assumed:
 9. **Corpus split.** KB authoring and prompt tuning see only the dev split. The eval split is
    frozen before stage 3 starts.
 
+10. **Timing statistic.** A run's time is a low quantile of its samples (p20 by default), not the
+    median. Interference from other work on the GPU only adds time. On this WSL2 machine the
+    Windows desktop slowed up to 40% of the samples of a 1.2 ms matmul: the medians of two
+    identical A/A arms differed by 16%, their p20s by under 0.1%.
+
 ## 5. Repository layout
 
 ```
@@ -220,19 +235,29 @@ sm-forge/
     config.py
     models.py                 # pydantic: Issue, Analysis, StageResult, Trial, RunReport
     spec.py                   # spec.yaml loader, flop/bytes formulas, variants
+    render.py                 # text output for the CLIs
     device/
-      query.py                # torch + NVML properties, feature probes
-      roofline.py             # measured peaks and ridge points
+      query.py                # torch, driver and nvidia-smi properties
+      probes.py               # feature probes: compile, check SASS and output
+      kernels.py              # probe and bandwidth kernels
+      roofline.py             # measured bandwidth and matmul peaks
+      noise.py                # A/A timing noise
+      tools.py                # nvidia-smi; ncu, nsys, compute-sanitizer checks
+      profile.py              # hardware/<gpu>.yaml
     harness/
+      runner.py               # parent side: worker lifecycle, timeouts, restart after CUDA errors
       worker.py               # subprocess entry: build, run, check, time
-      pool.py                 # worker lifecycle, timeouts, restart after CUDA errors
-      correctness.py
-      timing.py               # events, L2 flush, interleaved A/B, min-effect verdict
-      audit.py                # AST rules, launch audit
+      workload.py             # kernel loading, inputs and Model construction per variant
+      source.py               # AST view of a kernel file
       static.py               # Triton static validator
-      facts.py                # regs, spills, smem, SASS mix, waves, arithmetic intensity
-      profile.py              # ncu / nsys runners and parsers
-      sanitizer.py            # compute-sanitizer wrapper
+      audit.py                # forward-path rules, launch audit
+      tolerance.py
+      correctness.py          # output comparison, weight copy, reference cache
+      timing.py               # events, L2 flush, quantile, interleaved A/B, verdict
+      launches.py             # kernels one forward launches, from the profiler
+      facts.py                # regs, spills, smem, SASS mix, occupancy, waves
+      ncu.py                  # stage 6: ncu / nsys runners and parsers
+      sanitizer.py            # stage 6: compute-sanitizer wrapper
     kb/
       schema.py
       loader.py               # arch filter, stage slices, token budget
