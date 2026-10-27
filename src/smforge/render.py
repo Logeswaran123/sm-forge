@@ -29,6 +29,8 @@ def issues(items: list[ValidationIssue]) -> str:
 
 def check(result: CheckResult) -> str:
     tolerance = f"rtol {result.rtol:g}, atol {result.atol:g}"
+    if result.oracle_dtype:
+        tolerance += f", {result.oracle_dtype} oracle"
     if result.passed:
         return f"correctness: pass ({result.draws} draws, {tolerance}, weights {result.weights})"
     lines = [f"correctness: FAIL at draw {result.draws} ({tolerance})"]

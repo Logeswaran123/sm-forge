@@ -6,12 +6,14 @@ import hashlib
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import numpy as np
 import torch
 from torch import nn
 
+from smforge.harness.launches import triton_names
 from smforge.harness.workload import Workload, clone, load_module
 from smforge.models import CheckResult, OutputDiff
 
@@ -118,6 +120,26 @@ def _move(value: Any, device: torch.device) -> Any:
     return value
 
 
+def _cast(value: Any, dtype: torch.dtype) -> Any:
+    if isinstance(value, torch.Tensor) and value.is_floating_point():
+        return value.to(dtype)
+    if isinstance(value, list | tuple):
+        return type(value)(_cast(v, dtype) for v in value)
+    return value
+
+
+def oracle_dtype(workload: Workload, module: ModuleType) -> torch.dtype | None:
+    """float64 when a float32 workload's oracle is plain PyTorch, else None (the workload's).
+
+    Eager float32 is not always within float32's tolerance of the exact result: a cuDNN algorithm
+    picked for a large batch, or a sum over millions of terms, can leave it further off than a
+    careful kernel.
+    """
+    if workload.dtype == torch.float32 and not triton_names(module):
+        return torch.float64
+    return None
+
+
 def check_kernel(
     candidate: Path,
     oracle: Path,
@@ -132,31 +154,36 @@ def check_kernel(
     The candidate model is built once, so a module that caches its first output fails the
     second draw.
     """
-    reference = workload.build(load_module(oracle))
+    oracle_module = load_module(oracle)
+    upcast = oracle_dtype(workload, oracle_module)
+    reference = workload.build(oracle_module, upcast)
     model = workload.build(load_module(candidate))
     weights = copy_weights(reference, model)
     digest = hashlib.sha256(oracle.read_bytes())
     digest.update(workload.key().encode())
-    digest.update(torch.__version__.encode())
+    digest.update(f"{torch.__version__} {upcast}".encode())
+    result = partial(
+        CheckResult,
+        rtol=rtol,
+        atol=atol,
+        weights=weights,
+        oracle_dtype=str(upcast).removeprefix("torch.") if upcast else None,
+    )
     diffs: list[OutputDiff] = []
     for draw in range(draws):
         inputs = workload.inputs(draw)
-        expected = cache.get(f"{digest.hexdigest()[:24]}-{draw}", partial(_run, reference, inputs))
+        expected = cache.get(
+            f"{digest.hexdigest()[:24]}-{draw}", partial(_run, reference, inputs, upcast)
+        )
         actual = _run(model, inputs)
         torch.cuda.synchronize()
         diffs, error = compare_outputs(expected, actual, rtol, atol)
         if error or any(d.mismatched for d in diffs):
-            return CheckResult(
-                passed=False,
-                rtol=rtol,
-                atol=atol,
-                draws=draw + 1,
-                weights=weights,
-                diffs=diffs,
-                error=error,
-            )
-    return CheckResult(passed=True, rtol=rtol, atol=atol, draws=draws, weights=weights, diffs=diffs)
+            return result(passed=False, draws=draw + 1, diffs=diffs, error=error)
+    return result(passed=True, draws=draws, diffs=diffs)
 
 
-def _run(model: nn.Module, inputs: list) -> Any:
-    return model(*clone(inputs))
+def _run(model: nn.Module, inputs: list, upcast: torch.dtype | None = None) -> Any:
+    if upcast is None:
+        return model(*clone(inputs))
+    return _cast(model(*_cast(inputs, upcast)), torch.float32)

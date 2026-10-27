@@ -38,6 +38,7 @@ class CheckResult(BaseModel):
     atol: float
     draws: int = 0
     weights: str | None = None
+    oracle_dtype: str | None = None
     diffs: list[OutputDiff] = Field(default_factory=list)
     error: str | None = None
 

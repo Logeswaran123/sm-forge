@@ -42,6 +42,14 @@ def test_kernel_matches_reference(runner, variant):
     assert (result.rtol, result.atol) == (1e-2, 1e-2)
 
 
+def test_float32_reference_runs_in_float64(runner):
+    result = runner.check(REFERENCE, REFERENCE, spec=SPEC, variant="ci-fp32")
+    assert result.passed, result
+    assert result.oracle_dtype == "float64"
+    assert runner.check(KERNEL, REFERENCE, spec=SPEC, variant="ci").oracle_dtype is None
+    assert runner.check(KERNEL, KERNEL, spec=SPEC, variant="ci-fp32").oracle_dtype is None
+
+
 def test_wrong_mask(runner, tmp_path):
     candidate = edited(tmp_path, "(offs_n[None, :] < N)\n", "(offs_n[None, :] < N - 1)\n")
     result = runner.check(candidate, REFERENCE, spec=SPEC, variant="ci")
