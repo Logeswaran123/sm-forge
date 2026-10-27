@@ -27,7 +27,7 @@ from smforge.corpus.results import provenance, upsert
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
-from smforge.llm.client import BudgetExceeded, LLMClient, Refused
+from smforge.llm.client import BudgetExceeded, LLMClient, MissingCredentials, Refused
 from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline
 from smforge.spec import load_spec
 
@@ -236,6 +236,9 @@ def cmd_seed(args: argparse.Namespace) -> int:
             except BudgetExceeded as e:
                 print(f"stopping: {e}", flush=True)
                 break
+            except MissingCredentials as e:
+                print(e, file=sys.stderr)
+                return 2
             except Refused as e:
                 print(f"{problem.id}: REFUSED {e}", flush=True)
                 continue

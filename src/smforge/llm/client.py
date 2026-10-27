@@ -57,6 +57,10 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class MissingCredentials(RuntimeError):
+    pass
+
+
 class LLMClient:
     def __init__(self, config: LLMConfig, transcripts: Path | None = None):
         self.config = config
@@ -96,8 +100,17 @@ class LLMClient:
     def _send(self, request: dict) -> Any:
         if self._client is None:
             self._client = anthropic.Anthropic()
-        with self._client.beta.messages.stream(**request) as stream:
-            return stream.get_final_message()
+        try:
+            with self._client.beta.messages.stream(**request) as stream:
+                return stream.get_final_message()
+        except anthropic.AuthenticationError as e:
+            raise MissingCredentials(f"Anthropic rejected the credentials: {e}") from e
+        except TypeError as e:
+            if "authentication" not in str(e):
+                raise
+            raise MissingCredentials(
+                "no Anthropic credentials: set ANTHROPIC_API_KEY in .env or run `ant auth login`"
+            ) from e
 
     def _record(self, request: dict, reply: Reply) -> None:
         if self.transcripts is None:
