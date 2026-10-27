@@ -3,6 +3,7 @@ name = "sm-forge"
 version = "0.2.1"
 description = "Multi-stage LLM-driven optimization of Triton kernels for NVIDIA GPUs"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
   "anthropic>=2.3",

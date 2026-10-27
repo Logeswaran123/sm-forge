@@ -81,3 +81,9 @@ python scripts/roofline.py                 # plots/roofline.png
 pytest            # GPU tests are skipped when no NVIDIA GPU is present
 ruff check .
 ```
+
+## License
+
+Apache-2.0; see [LICENSE](LICENSE). The timing loop in `src/smforge/harness/timing.py` is adapted
+from [Xe-Forge](https://github.com/IntelLabs/Xe-Forge), also Apache-2.0. The KernelBench problems
+in `corpus/kernelbench/` are under KernelBench's MIT license, included there.
