@@ -1,0 +1,4 @@
+id: l2_085_conv2d_groupnorm_scale_maxpool_clamp
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/85_Conv2d_GroupNorm_Scale_MaxPool_Clamp.py@423217d9fda9

@@ -1,0 +1,7 @@
+id: l2_050_convtranspose3d_scaling_avgpool_biasadd_scaling
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/50_ConvTranspose3d_Scaling_AvgPool_BiasAdd_Scaling.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.0 GiB, 14.0 ms; 64:
+  0.5 GiB, 7.0 ms)'

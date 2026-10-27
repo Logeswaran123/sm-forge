@@ -1,0 +1,24 @@
+inputs:
+  x:
+    shape: [BATCH_SIZE, FEATURES, DIM1, DIM2]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- normalized_shape: [FEATURES, DIM1, DIM2]
+default_variant: bench-gpu
+bench-gpu:
+- params: [x]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 2
+    FEATURES: 64
+    DIM1: 256
+    DIM2: 256
+  bytes: 50331648
+kernelbench:
+- params: [x]
+  dims:
+    BATCH_SIZE: 16
+    FEATURES: 64
+    DIM1: 256
+    DIM2: 256

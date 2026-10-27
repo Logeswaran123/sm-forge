@@ -1,0 +1,57 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, IN_CHANNELS, D, H, W]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- in_channels: IN_CHANNELS
+- out_channels: OUT_CHANNELS
+- kernel_size: KERNEL_SIZE
+- stride: STRIDE
+- padding: PADDING
+- bias: true
+- eps: 1.0e-05
+- scaling_factor: 1.0
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 8
+    IN_CHANNELS: 32
+    D: 16
+    H: 32
+    W: 32
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 4
+    STRIDE: 2
+    PADDING: 1
+  flop: 34359738368
+  bytes: 142868864
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    IN_CHANNELS: 32
+    D: 16
+    H: 32
+    W: 32
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 4
+    STRIDE: 2
+    PADDING: 1
+  flop: 12884901888
+  bytes: 53739904
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 32
+    IN_CHANNELS: 32
+    D: 16
+    H: 32
+    W: 32
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 4
+    STRIDE: 2
+    PADDING: 1

@@ -1,0 +1,7 @@
+id: l2_046_conv2d_subtract_tanh_subtract_avgpool
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/46_Conv2d_Subtract_Tanh_Subtract_AvgPool.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.5 GiB, 11.3 ms; 64:
+  0.7 GiB, 5.5 ms)'

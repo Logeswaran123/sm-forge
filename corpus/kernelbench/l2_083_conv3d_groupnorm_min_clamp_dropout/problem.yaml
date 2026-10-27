@@ -1,0 +1,6 @@
+id: l2_083_conv3d_groupnorm_min_clamp_dropout
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/83_Conv3d_GroupNorm_Min_Clamp_Dropout.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 0.5 GiB, 6.4 ms)'

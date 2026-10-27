@@ -1,0 +1,7 @@
+id: l2_016_convtranspose2d_mish_add_hardtanh_scaling
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/16_ConvTranspose2d_Mish_Add_Hardtanh_Scaling.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 2.5 GiB, 19.9 ms; 64:
+  1.3 GiB, 9.8 ms)'

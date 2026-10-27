@@ -1,0 +1,6 @@
+id: l2_092_conv2d_groupnorm_tanh_hardswish_residualadd_logsumexp
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/92_Conv2d_GroupNorm_Tanh_HardSwish_ResidualAdd_LogSumExp.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 1.5 GiB, 7.2 ms)'

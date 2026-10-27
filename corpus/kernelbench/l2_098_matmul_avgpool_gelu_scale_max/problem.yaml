@@ -1,0 +1,4 @@
+id: l2_098_matmul_avgpool_gelu_scale_max
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/98_Matmul_AvgPool_GELU_Scale_Max.py@423217d9fda9

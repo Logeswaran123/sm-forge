@@ -1,0 +1,4 @@
+id: l2_084_gemm_batchnorm_scaling_softmax
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/84_Gemm_BatchNorm_Scaling_Softmax.py@423217d9fda9

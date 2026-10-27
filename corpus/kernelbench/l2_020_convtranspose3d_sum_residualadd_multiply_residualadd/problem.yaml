@@ -1,0 +1,6 @@
+id: l2_020_convtranspose3d_sum_residualadd_multiply_residualadd
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/20_ConvTranspose3d_Sum_ResidualAdd_Multiply_ResidualAdd.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16 -> 8 to fit 4 GiB and 5 ms in float16 (16: 0.8 GiB, 6.2 ms)'

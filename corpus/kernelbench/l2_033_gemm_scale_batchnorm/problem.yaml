@@ -1,0 +1,4 @@
+id: l2_033_gemm_scale_batchnorm
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/33_Gemm_Scale_BatchNorm.py@423217d9fda9

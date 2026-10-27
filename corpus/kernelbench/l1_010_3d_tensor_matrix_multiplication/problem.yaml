@@ -1,0 +1,4 @@
+id: l1_010_3d_tensor_matrix_multiplication
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/10_3D_tensor_matrix_multiplication.py@423217d9fda9

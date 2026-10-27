@@ -1,0 +1,4 @@
+id: l2_080_gemm_max_subtract_gelu
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/80_Gemm_Max_Subtract_GELU.py@423217d9fda9

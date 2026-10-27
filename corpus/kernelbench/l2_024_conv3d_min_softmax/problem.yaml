@@ -1,0 +1,4 @@
+id: l2_024_conv3d_min_softmax
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/24_Conv3d_Min_Softmax.py@423217d9fda9

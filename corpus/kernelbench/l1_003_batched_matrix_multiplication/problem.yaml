@@ -1,0 +1,4 @@
+id: l1_003_batched_matrix_multiplication
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/3_Batched_matrix_multiplication.py@423217d9fda9

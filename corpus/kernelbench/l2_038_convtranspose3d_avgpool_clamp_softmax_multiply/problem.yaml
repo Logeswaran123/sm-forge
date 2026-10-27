@@ -1,0 +1,6 @@
+id: l2_038_convtranspose3d_avgpool_clamp_softmax_multiply
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/38_ConvTranspose3d_AvgPool_Clamp_Softmax_Multiply.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32 -> 16 to fit 4 GiB and 5 ms in float16 (32: 1.3 GiB, 8.6 ms)'

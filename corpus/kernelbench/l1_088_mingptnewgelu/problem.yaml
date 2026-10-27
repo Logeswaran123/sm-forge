@@ -1,0 +1,4 @@
+id: l1_088_mingptnewgelu
+source: kernelbench
+family: activation
+upstream: KernelBench/level1/88_MinGPTNewGelu.py@423217d9fda9

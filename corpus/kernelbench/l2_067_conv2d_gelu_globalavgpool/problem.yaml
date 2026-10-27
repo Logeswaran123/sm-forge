@@ -1,0 +1,7 @@
+id: l2_067_conv2d_gelu_globalavgpool
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/67_Conv2d_GELU_GlobalAvgPool.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 2.2 GiB, 11.3 ms; 64:
+  1.1 GiB, 5.6 ms)'

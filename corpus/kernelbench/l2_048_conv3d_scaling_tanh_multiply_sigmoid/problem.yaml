@@ -1,0 +1,6 @@
+id: l2_048_conv3d_scaling_tanh_multiply_sigmoid
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/48_Conv3d_Scaling_Tanh_Multiply_Sigmoid.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 0.5 GiB, 6.9 ms)'

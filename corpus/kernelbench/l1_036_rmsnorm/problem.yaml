@@ -1,0 +1,9 @@
+id: l1_036_rmsnorm
+source: kernelbench
+family: norm
+upstream: KernelBench/level1/36_RMSNorm_.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 112 -> 14 to fit 4 GiB and 5 ms in float16 (112: OutOfMemoryError: CUDA
+  out of memory. Tried to allocate 7.00 GiB. GPU 0 has a to; 56: OutOfMemoryError:
+  CUDA out of memory. Tried to allocate 28.00 GiB. GPU 0 has a t; 28: 1.8 GiB, 11.9
+  ms)'

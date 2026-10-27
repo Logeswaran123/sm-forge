@@ -1,0 +1,7 @@
+id: l2_041_gemm_batchnorm_gelu_relu
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/41_Gemm_BatchNorm_GELU_ReLU.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16384 -> 8192 to fit 4 GiB and 5 ms in float16 (16384: 0.4 GiB, 5.7
+  ms)'

@@ -1,0 +1,54 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, IN_CHANNELS, HEIGHT, WIDTH]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- in_channels: IN_CHANNELS
+- out_channels: OUT_CHANNELS
+- kernel_size: KERNEL_SIZE
+- num_groups: NUM_GROUPS
+- scale_shape: [OUT_CHANNELS, 1, 1]
+- maxpool_kernel_size: MAXPOOL_KERNEL_SIZE
+- clamp_min: 0.0
+- clamp_max: 1.0
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 128
+    IN_CHANNELS: 8
+    HEIGHT: 128
+    WIDTH: 128
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    NUM_GROUPS: 16
+    MAXPOOL_KERNEL_SIZE: 4
+  flop: 18728091648
+  bytes: 49309184
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    IN_CHANNELS: 8
+    HEIGHT: 128
+    WIDTH: 128
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    NUM_GROUPS: 16
+    MAXPOOL_KERNEL_SIZE: 4
+  flop: 438939648
+  bytes: 1165184
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 128
+    IN_CHANNELS: 8
+    HEIGHT: 128
+    WIDTH: 128
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    NUM_GROUPS: 16
+    MAXPOOL_KERNEL_SIZE: 4

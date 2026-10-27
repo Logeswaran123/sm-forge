@@ -1,0 +1,42 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, IN_FEATURES]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- in_features: IN_FEATURES
+- out_features: OUT_FEATURES
+- scaling_factor: 0.5
+- hardtanh_min: HARDTANH_MIN
+- hardtanh_max: HARDTANH_MAX
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 2048
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    HARDTANH_MIN: -2
+    HARDTANH_MAX: 2
+  flop: 274877906944
+  bytes: 201342976
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    HARDTANH_MIN: -2
+    HARDTANH_MAX: 2
+  flop: 402653184
+  bytes: 134332416
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 2048
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    HARDTANH_MIN: -2
+    HARDTANH_MAX: 2

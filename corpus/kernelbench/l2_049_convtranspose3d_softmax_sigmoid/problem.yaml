@@ -1,0 +1,4 @@
+id: l2_049_convtranspose3d_softmax_sigmoid
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/49_ConvTranspose3d_Softmax_Sigmoid.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l2_029_matmul_mish_mish
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/29_Matmul_Mish_Mish.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l2_076_gemm_add_relu
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/76_Gemm_Add_ReLU.py@423217d9fda9

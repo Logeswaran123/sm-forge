@@ -1,0 +1,10 @@
+id: l1_089_cumsum
+source: kernelbench
+family: scan
+upstream: KernelBench/level1/89_cumsum.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32768 -> 8192 to fit 4 GiB and 5 ms in float16 (32768: OutOfMemoryError:
+  CUDA out of memory. Tried to allocate 16.00 GiB. GPU 0 has a t; 16384: 2.0 GiB,
+  6.0 ms)'
+- float16 reference differs from float32 by up to 1.6e+03
+- bfloat16 reference differs from float32 by up to 8.39e+03

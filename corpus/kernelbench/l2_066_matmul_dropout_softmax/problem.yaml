@@ -1,0 +1,4 @@
+id: l2_066_matmul_dropout_softmax
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/66_Matmul_Dropout_Softmax.py@423217d9fda9

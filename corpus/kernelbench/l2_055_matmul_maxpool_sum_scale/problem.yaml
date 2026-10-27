@@ -1,0 +1,4 @@
+id: l2_055_matmul_maxpool_sum_scale
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/55_Matmul_MaxPool_Sum_Scale.py@423217d9fda9

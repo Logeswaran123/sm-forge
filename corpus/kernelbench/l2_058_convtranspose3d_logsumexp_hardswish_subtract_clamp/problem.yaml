@@ -1,0 +1,7 @@
+id: l2_058_convtranspose3d_logsumexp_hardswish_subtract_clamp
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/58_ConvTranspose3d_LogSumExp_HardSwish_Subtract_Clamp.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.0 GiB, 15.9 ms; 64:
+  0.5 GiB, 7.8 ms)'

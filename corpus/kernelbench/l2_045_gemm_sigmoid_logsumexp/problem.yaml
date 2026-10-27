@@ -1,0 +1,4 @@
+id: l2_045_gemm_sigmoid_logsumexp
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/45_Gemm_Sigmoid_LogSumExp.py@423217d9fda9

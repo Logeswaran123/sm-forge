@@ -1,0 +1,7 @@
+id: l2_032_conv2d_scaling_min
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/32_Conv2d_Scaling_Min.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 64 -> 16 to fit 4 GiB and 5 ms in float16 (64: 3.0 GiB, 15.8 ms; 32:
+  1.5 GiB, 8.6 ms)'

@@ -1,0 +1,4 @@
+id: l2_015_convtranspose3d_batchnorm_subtract
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/15_ConvTranspose3d_BatchNorm_Subtract.py@423217d9fda9

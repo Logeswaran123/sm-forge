@@ -1,0 +1,7 @@
+id: l2_018_matmul_sum_max_avgpool_logsumexp_logsumexp
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/18_Matmul_Sum_Max_AvgPool_LogSumExp_LogSumExp.py@423217d9fda9
+notes:
+- float16 reference differs from float32 by up to 0.0512
+- bfloat16 reference differs from float32 by up to 0.255

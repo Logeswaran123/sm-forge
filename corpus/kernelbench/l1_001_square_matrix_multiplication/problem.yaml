@@ -1,0 +1,4 @@
+id: l1_001_square_matrix_multiplication
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/1_Square_matrix_multiplication_.py@423217d9fda9

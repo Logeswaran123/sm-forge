@@ -1,0 +1,7 @@
+id: l2_042_convtranspose2d_globalavgpool_biasadd_logsumexp_sum_multiply
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/42_ConvTranspose2d_GlobalAvgPool_BiasAdd_LogSumExp_Sum_Multiply.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16 -> 4 to fit 4 GiB and 5 ms in float16 (16: 3.0 GiB, 13.3 ms; 8: 1.5
+  GiB, 6.7 ms)'

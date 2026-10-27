@@ -1,0 +1,7 @@
+id: l2_035_conv2d_subtract_hardswish_maxpool_mish
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/35_Conv2d_Subtract_HardSwish_MaxPool_Mish.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.5 GiB, 10.1 ms; 64:
+  0.7 GiB, 5.1 ms)'

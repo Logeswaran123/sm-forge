@@ -1,0 +1,4 @@
+id: l2_079_conv3d_multiply_instancenorm_clamp_multiply_max
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/79_Conv3d_Multiply_InstanceNorm_Clamp_Multiply_Max.py@423217d9fda9

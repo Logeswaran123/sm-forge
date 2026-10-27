@@ -1,0 +1,4 @@
+id: l2_061_convtranspose3d_relu_groupnorm
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/61_ConvTranspose3d_ReLU_GroupNorm.py@423217d9fda9

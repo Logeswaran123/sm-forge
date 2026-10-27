@@ -1,0 +1,4 @@
+id: l2_059_matmul_swish_scaling
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/59_Matmul_Swish_Scaling.py@423217d9fda9

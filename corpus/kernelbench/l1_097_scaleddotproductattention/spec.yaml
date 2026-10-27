@@ -1,0 +1,42 @@
+inputs:
+  Q:
+    shape: [BATCH_SIZE, NUM_HEADS, SEQUENCE_LENGTH, EMBEDDING_DIMENSION]
+    dtype: float32
+    range: [0.0, 1.0]
+  K:
+    shape: [BATCH_SIZE, NUM_HEADS, SEQUENCE_LENGTH, EMBEDDING_DIMENSION]
+    dtype: float32
+    range: [0.0, 1.0]
+  V:
+    shape: [BATCH_SIZE, NUM_HEADS, SEQUENCE_LENGTH, EMBEDDING_DIMENSION]
+    dtype: float32
+    range: [0.0, 1.0]
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [Q, K, V]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 4
+    NUM_HEADS: 32
+    SEQUENCE_LENGTH: 512
+    EMBEDDING_DIMENSION: 1024
+  flop: 137438953472
+  bytes: 536870912
+ci:
+- params: [Q, K, V]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    NUM_HEADS: 32
+    SEQUENCE_LENGTH: 512
+    EMBEDDING_DIMENSION: 1024
+  flop: 103079215104
+  bytes: 402653184
+kernelbench:
+- params: [Q, K, V]
+  dims:
+    BATCH_SIZE: 32
+    NUM_HEADS: 32
+    SEQUENCE_LENGTH: 512
+    EMBEDDING_DIMENSION: 1024

@@ -1,0 +1,4 @@
+id: l2_008_conv3d_divide_max_globalavgpool_biasadd_sum
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/8_Conv3d_Divide_Max_GlobalAvgPool_BiasAdd_Sum.py@423217d9fda9

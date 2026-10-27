@@ -1,0 +1,4 @@
+id: l1_008_matmul_with_irregular_shapes
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/8_Matmul_with_irregular_shapes_.py@423217d9fda9

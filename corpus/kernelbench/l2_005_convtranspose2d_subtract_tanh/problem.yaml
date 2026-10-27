@@ -1,0 +1,7 @@
+id: l2_005_convtranspose2d_subtract_tanh
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/5_ConvTranspose2d_Subtract_Tanh.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32 -> 8 to fit 4 GiB and 5 ms in float16 (32: 2.5 GiB, 15.3 ms; 16:
+  1.3 GiB, 7.6 ms)'

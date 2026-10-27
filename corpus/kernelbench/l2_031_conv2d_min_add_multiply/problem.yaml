@@ -1,0 +1,6 @@
+id: l2_031_conv2d_min_add_multiply
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/31_Conv2d_Min_Add_Multiply.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 1.5 GiB, 9.6 ms)'

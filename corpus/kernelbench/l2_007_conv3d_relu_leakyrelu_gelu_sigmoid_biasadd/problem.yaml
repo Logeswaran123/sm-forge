@@ -1,0 +1,6 @@
+id: l2_007_conv3d_relu_leakyrelu_gelu_sigmoid_biasadd
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/7_Conv3d_ReLU_LeakyReLU_GELU_Sigmoid_BiasAdd.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 64 -> 32 to fit 4 GiB and 5 ms in float16 (64: 1.1 GiB, 9.9 ms)'

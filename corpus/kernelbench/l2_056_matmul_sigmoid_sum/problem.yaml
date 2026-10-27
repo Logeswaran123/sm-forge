@@ -1,0 +1,4 @@
+id: l2_056_matmul_sigmoid_sum
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/56_Matmul_Sigmoid_Sum.py@423217d9fda9

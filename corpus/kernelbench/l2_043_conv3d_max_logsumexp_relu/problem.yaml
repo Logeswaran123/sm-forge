@@ -1,0 +1,4 @@
+id: l2_043_conv3d_max_logsumexp_relu
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/43_Conv3d_Max_LogSumExp_ReLU.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l1_016_matmul_with_transposed_a
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/16_Matmul_with_transposed_A.py@423217d9fda9

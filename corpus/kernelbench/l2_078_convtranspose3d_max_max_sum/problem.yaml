@@ -1,0 +1,6 @@
+id: l2_078_convtranspose3d_max_max_sum
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/78_ConvTranspose3d_Max_Max_Sum.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16 -> 8 to fit 4 GiB and 5 ms in float16 (16: 1.0 GiB, 6.7 ms)'

@@ -1,0 +1,7 @@
+id: l2_096_convtranspose3d_multiply_max_globalavgpool_clamp
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/96_ConvTranspose3d_Multiply_Max_GlobalAvgPool_Clamp.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.0 GiB, 13.8 ms; 64:
+  0.5 GiB, 6.9 ms)'

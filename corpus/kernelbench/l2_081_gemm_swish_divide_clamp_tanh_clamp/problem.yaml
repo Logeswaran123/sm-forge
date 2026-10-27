@@ -1,0 +1,4 @@
+id: l2_081_gemm_swish_divide_clamp_tanh_clamp
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/81_Gemm_Swish_Divide_Clamp_Tanh_Clamp.py@423217d9fda9

@@ -1,0 +1,7 @@
+id: l2_090_conv3d_leakyrelu_sum_clamp_gelu
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/90_Conv3d_LeakyReLU_Sum_Clamp_GELU.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.9 GiB, 17.2 ms; 64:
+  0.9 GiB, 7.9 ms)'

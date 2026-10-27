@@ -1,0 +1,4 @@
+id: l2_064_gemm_logsumexp_leakyrelu_leakyrelu_gelu_gelu
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/64_Gemm_LogSumExp_LeakyReLU_LeakyReLU_GELU_GELU.py@423217d9fda9

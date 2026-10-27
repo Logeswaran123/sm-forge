@@ -1,0 +1,6 @@
+id: l2_052_conv2d_activation_batchnorm
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/52_Conv2d_Activation_BatchNorm.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 64 -> 32 to fit 4 GiB and 5 ms in float16 (64: 0.9 GiB, 6.3 ms)'

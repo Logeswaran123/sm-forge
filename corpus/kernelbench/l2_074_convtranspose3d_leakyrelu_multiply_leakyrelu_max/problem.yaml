@@ -1,0 +1,4 @@
+id: l2_074_convtranspose3d_leakyrelu_multiply_leakyrelu_max
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/74_ConvTranspose3d_LeakyReLU_Multiply_LeakyReLU_Max.py@423217d9fda9

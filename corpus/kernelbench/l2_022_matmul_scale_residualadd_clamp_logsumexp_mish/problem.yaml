@@ -1,0 +1,4 @@
+id: l2_022_matmul_scale_residualadd_clamp_logsumexp_mish
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/22_Matmul_Scale_ResidualAdd_Clamp_LogSumExp_Mish.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l2_009_matmul_subtract_multiply_relu
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/9_Matmul_Subtract_Multiply_ReLU.py@423217d9fda9

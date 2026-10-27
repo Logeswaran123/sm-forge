@@ -1,0 +1,7 @@
+id: l1_004_matrix_vector_multiplication
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/4_Matrix_vector_multiplication_.py@423217d9fda9
+notes:
+- 'M 2048 -> 1024 to fit 4 GiB and 5 ms in float16 (2048: 4.0 GiB, 5.0 ms)'
+- float16 reference output is not finite

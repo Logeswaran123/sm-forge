@@ -1,0 +1,67 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, IN_CHANNELS, HEIGHT, WIDTH]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- in_channels: IN_CHANNELS
+- out_channels: OUT_CHANNELS
+- kernel_size: KERNEL_SIZE
+- stride: STRIDE
+- padding: PADDING
+- maxpool_kernel_size: MAXPOOL_KERNEL_SIZE
+- maxpool_stride: MAXPOOL_STRIDE
+- hardtanh_min: HARDTANH_MIN
+- hardtanh_max: HARDTANH_MAX
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 32
+    IN_CHANNELS: 64
+    HEIGHT: 256
+    WIDTH: 256
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    STRIDE: 1
+    PADDING: 1
+    MAXPOOL_KERNEL_SIZE: 2
+    MAXPOOL_STRIDE: 2
+    HARDTANH_MIN: -1
+    HARDTANH_MAX: 1
+  flop: 154618822656
+  bytes: 268513408
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    IN_CHANNELS: 64
+    HEIGHT: 256
+    WIDTH: 256
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    STRIDE: 1
+    PADDING: 1
+    MAXPOOL_KERNEL_SIZE: 2
+    MAXPOOL_STRIDE: 2
+    HARDTANH_MIN: -1
+    HARDTANH_MAX: 1
+  flop: 14495514624
+  bytes: 25240064
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 128
+    IN_CHANNELS: 64
+    HEIGHT: 256
+    WIDTH: 256
+    OUT_CHANNELS: 64
+    KERNEL_SIZE: 3
+    STRIDE: 1
+    PADDING: 1
+    MAXPOOL_KERNEL_SIZE: 2
+    MAXPOOL_STRIDE: 2
+    HARDTANH_MIN: -1
+    HARDTANH_MAX: 1

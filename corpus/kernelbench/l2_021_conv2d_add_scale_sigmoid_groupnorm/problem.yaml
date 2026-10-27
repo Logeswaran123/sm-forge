@@ -1,0 +1,7 @@
+id: l2_021_conv2d_add_scale_sigmoid_groupnorm
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/21_Conv2d_Add_Scale_Sigmoid_GroupNorm.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.2 GiB, 11.6 ms; 64:
+  0.6 GiB, 5.3 ms)'

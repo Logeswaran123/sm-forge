@@ -1,0 +1,7 @@
+id: l2_091_convtranspose2d_softmax_biasadd_scaling_sigmoid
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/91_ConvTranspose2d_Softmax_BiasAdd_Scaling_Sigmoid.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.1 GiB, 12.1 ms; 64:
+  0.6 GiB, 6.0 ms)'

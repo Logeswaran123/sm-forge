@@ -1,0 +1,4 @@
+id: l2_047_conv3d_mish_tanh
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/47_Conv3d_Mish_Tanh.py@423217d9fda9

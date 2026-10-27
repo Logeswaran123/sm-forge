@@ -1,0 +1,4 @@
+id: l2_062_matmul_groupnorm_leakyrelu_sum
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/62_Matmul_GroupNorm_LeakyReLU_Sum.py@423217d9fda9

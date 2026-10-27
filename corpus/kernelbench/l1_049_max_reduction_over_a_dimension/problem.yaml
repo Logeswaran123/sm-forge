@@ -1,0 +1,6 @@
+id: l1_049_max_reduction_over_a_dimension
+source: kernelbench
+family: reduction
+upstream: KernelBench/level1/49_Max_reduction_over_a_dimension.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 4.0 GiB, 5.8 ms)'

@@ -1,0 +1,29 @@
+inputs:
+  A:
+    shape: [N, N]
+    dtype: float32
+    range: [0.0, 1.0]
+  B:
+    shape: [N, N]
+    dtype: float32
+    range: [0.0, 1.0]
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [A, B]
+  dtype: float16
+  dims:
+    N: 4096
+  flop: 137438953472
+  bytes: 100663296
+ci:
+- params: [A, B]
+  dtype: float16
+  dims:
+    N: 3
+  flop: 54
+  bytes: 54
+kernelbench:
+- params: [A, B]
+  dims:
+    N: 4096

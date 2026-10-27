@@ -1,0 +1,4 @@
+id: l2_088_gemm_groupnorm_swish_multiply_swish
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/88_Gemm_GroupNorm_Swish_Multiply_Swish.py@423217d9fda9

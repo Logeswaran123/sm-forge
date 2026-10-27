@@ -1,0 +1,4 @@
+id: l2_063_gemm_relu_divide
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/63_Gemm_ReLU_Divide.py@423217d9fda9

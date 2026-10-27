@@ -1,0 +1,4 @@
+id: l2_030_gemm_groupnorm_hardtanh
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/30_Gemm_GroupNorm_Hardtanh.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l2_095_matmul_add_swish_tanh_gelu_hardtanh
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/95_Matmul_Add_Swish_Tanh_GELU_Hardtanh.py@423217d9fda9

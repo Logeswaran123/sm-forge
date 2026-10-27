@@ -1,0 +1,7 @@
+id: l2_014_gemm_divide_sum_scaling
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/14_Gemm_Divide_Sum_Scaling.py@423217d9fda9
+notes:
+- float16 reference differs from float32 by up to 4.36
+- bfloat16 reference differs from float32 by up to 28.3

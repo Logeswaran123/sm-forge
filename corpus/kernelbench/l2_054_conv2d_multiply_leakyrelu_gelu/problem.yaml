@@ -1,0 +1,7 @@
+id: l2_054_conv2d_multiply_leakyrelu_gelu
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/54_Conv2d_Multiply_LeakyReLU_GELU.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 64 -> 16 to fit 4 GiB and 5 ms in float16 (64: 2.0 GiB, 10.9 ms; 32:
+  1.0 GiB, 5.4 ms)'

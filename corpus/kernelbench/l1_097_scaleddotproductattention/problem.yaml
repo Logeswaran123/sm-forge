@@ -1,0 +1,8 @@
+id: l1_097_scaleddotproductattention
+source: kernelbench
+family: loss
+upstream: KernelBench/level1/97_ScaledDotProductAttention.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32 -> 4 to fit 4 GiB and 5 ms in float16 (32: OutOfMemoryError: CUDA
+  out of memory. Tried to allocate 2.00 GiB. GPU 0 has a to; 16: 3.0 GiB, 14.2 ms;
+  8: 1.5 GiB, 7.0 ms)'

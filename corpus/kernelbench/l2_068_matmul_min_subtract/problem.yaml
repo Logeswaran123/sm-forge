@@ -1,0 +1,4 @@
+id: l2_068_matmul_min_subtract
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/68_Matmul_Min_Subtract.py@423217d9fda9

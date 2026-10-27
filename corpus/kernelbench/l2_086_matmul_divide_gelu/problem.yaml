@@ -1,0 +1,4 @@
+id: l2_086_matmul_divide_gelu
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/86_Matmul_Divide_GELU.py@423217d9fda9

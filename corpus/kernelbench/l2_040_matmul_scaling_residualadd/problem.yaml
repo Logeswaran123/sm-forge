@@ -1,0 +1,7 @@
+id: l2_040_matmul_scaling_residualadd
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/40_Matmul_Scaling_ResidualAdd.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16384 -> 8192 to fit 4 GiB and 5 ms in float16 (16384: 0.5 GiB, 5.8
+  ms)'

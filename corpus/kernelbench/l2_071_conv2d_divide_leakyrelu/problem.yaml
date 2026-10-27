@@ -1,0 +1,4 @@
+id: l2_071_conv2d_divide_leakyrelu
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/71_Conv2d_Divide_LeakyReLU.py@423217d9fda9

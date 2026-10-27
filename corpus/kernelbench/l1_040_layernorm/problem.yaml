@@ -1,0 +1,7 @@
+id: l1_040_layernorm
+source: kernelbench
+family: norm
+upstream: KernelBench/level1/40_LayerNorm.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16 -> 2 to fit 4 GiB and 5 ms in float16 (16: 0.3 GiB, 6.5 ms; 8: 0.1
+  GiB, 6.5 ms; 4: 0.1 GiB, 5.5 ms)'

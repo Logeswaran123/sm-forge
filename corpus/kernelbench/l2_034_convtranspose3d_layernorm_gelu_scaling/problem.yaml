@@ -1,0 +1,7 @@
+id: l2_034_convtranspose3d_layernorm_gelu_scaling
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/34_ConvTranspose3d_LayerNorm_GELU_Scaling.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32 -> 8 to fit 4 GiB and 5 ms in float16 (32: 1.1 GiB, 14.3 ms; 16:
+  0.5 GiB, 7.1 ms)'

@@ -1,0 +1,7 @@
+id: l2_087_conv2d_subtract_subtract_mish
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/87_Conv2d_Subtract_Subtract_Mish.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 2.2 GiB, 15.5 ms; 64:
+  1.1 GiB, 7.6 ms)'

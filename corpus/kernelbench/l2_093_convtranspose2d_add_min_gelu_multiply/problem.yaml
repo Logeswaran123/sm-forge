@@ -1,0 +1,6 @@
+id: l2_093_convtranspose2d_add_min_gelu_multiply
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/93_ConvTranspose2d_Add_Min_GELU_Multiply.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 1.2 GiB, 9.9 ms)'

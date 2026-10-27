@@ -1,0 +1,30 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, NUM_CLASSES]
+    dtype: float32
+    range: [0.0, 1.0]
+  x1:
+    shape: [BATCH_SIZE]
+    dtype: int64
+    range: [0, NUM_CLASSES]
+inits: []
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0, x1]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 32768
+    NUM_CLASSES: 4096
+  bytes: 268697602
+ci:
+- params: [x0, x1]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    NUM_CLASSES: 4096
+  bytes: 24602
+kernelbench:
+- params: [x0, x1]
+  dims:
+    BATCH_SIZE: 32768
+    NUM_CLASSES: 4096

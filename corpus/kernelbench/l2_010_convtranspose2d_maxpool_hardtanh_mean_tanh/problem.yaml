@@ -1,0 +1,7 @@
+id: l2_010_convtranspose2d_maxpool_hardtanh_mean_tanh
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/10_ConvTranspose2d_MaxPool_Hardtanh_Mean_Tanh.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 4.0 GiB, 18.3 ms; 64:
+  2.0 GiB, 9.1 ms)'

@@ -1,0 +1,4 @@
+id: l2_051_gemm_subtract_globalavgpool_logsumexp_gelu_residualadd
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/51_Gemm_Subtract_GlobalAvgPool_LogSumExp_GELU_ResidualAdd.py@423217d9fda9

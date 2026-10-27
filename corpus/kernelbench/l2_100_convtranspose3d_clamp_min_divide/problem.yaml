@@ -1,0 +1,8 @@
+id: l2_100_convtranspose3d_clamp_min_divide
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/100_ConvTranspose3d_Clamp_Min_Divide.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 16 -> 2 to fit 4 GiB and 5 ms in float16 (16: OutOfMemoryError: CUDA
+  out of memory. Tried to allocate 32.36 GiB. GPU 0 has a t; 8: 1.7 GiB, 11.2 ms;
+  4: 0.9 GiB, 5.7 ms)'

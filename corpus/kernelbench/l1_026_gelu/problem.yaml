@@ -1,0 +1,8 @@
+id: l1_026_gelu
+source: kernelbench
+family: activation
+upstream: KernelBench/level1/26_GELU_.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 4096 -> 1024 to fit 4 GiB and 5 ms in float16 (4096: OutOfMemoryError:
+  CUDA out of memory. Tried to allocate 6.00 GiB. GPU 0 has a to; 2048: OutOfMemoryError:
+  CUDA out of memory. Tried to allocate 3.00 GiB. GPU 0 has a to)'

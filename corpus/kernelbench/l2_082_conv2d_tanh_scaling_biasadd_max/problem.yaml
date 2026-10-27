@@ -1,0 +1,7 @@
+id: l2_082_conv2d_tanh_scaling_biasadd_max
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/82_Conv2d_Tanh_Scaling_BiasAdd_Max.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 2.2 GiB, 18.5 ms; 64:
+  1.1 GiB, 8.4 ms)'

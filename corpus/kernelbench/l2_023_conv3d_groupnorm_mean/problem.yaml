@@ -1,0 +1,4 @@
+id: l2_023_conv3d_groupnorm_mean
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/23_Conv3d_GroupNorm_Mean.py@423217d9fda9

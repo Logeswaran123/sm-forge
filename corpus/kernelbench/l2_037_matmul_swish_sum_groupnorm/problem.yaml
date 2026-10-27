@@ -1,0 +1,7 @@
+id: l2_037_matmul_swish_sum_groupnorm
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/37_Matmul_Swish_Sum_GroupNorm.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32768 -> 16384 to fit 4 GiB and 5 ms in float16 (32768: 0.8 GiB, 6.8
+  ms)'

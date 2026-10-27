@@ -1,0 +1,4 @@
+id: l2_075_gemm_groupnorm_min_biasadd
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/75_Gemm_GroupNorm_Min_BiasAdd.py@423217d9fda9

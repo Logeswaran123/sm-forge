@@ -1,0 +1,4 @@
+id: l1_002_standard_matrix_multiplication
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/2_Standard_matrix_multiplication_.py@423217d9fda9

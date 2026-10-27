@@ -1,0 +1,4 @@
+id: l2_099_matmul_gelu_softmax
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/99_Matmul_GELU_Softmax.py@423217d9fda9

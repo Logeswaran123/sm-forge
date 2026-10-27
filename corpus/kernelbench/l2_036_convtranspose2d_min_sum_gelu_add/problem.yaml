@@ -1,0 +1,4 @@
+id: l2_036_convtranspose2d_min_sum_gelu_add
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/36_ConvTranspose2d_Min_Sum_GELU_Add.py@423217d9fda9

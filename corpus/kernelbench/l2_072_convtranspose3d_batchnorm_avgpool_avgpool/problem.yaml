@@ -1,0 +1,7 @@
+id: l2_072_convtranspose3d_batchnorm_avgpool_avgpool
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/72_ConvTranspose3d_BatchNorm_AvgPool_AvgPool.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 64 -> 16 to fit 4 GiB and 5 ms in float16 (64: 1.0 GiB, 14.5 ms; 32:
+  0.5 GiB, 7.3 ms)'

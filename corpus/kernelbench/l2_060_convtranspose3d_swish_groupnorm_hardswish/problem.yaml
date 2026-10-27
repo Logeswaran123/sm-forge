@@ -1,0 +1,7 @@
+id: l2_060_convtranspose3d_swish_groupnorm_hardswish
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/60_ConvTranspose3d_Swish_GroupNorm_HardSwish.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 32 to fit 4 GiB and 5 ms in float16 (128: 1.4 GiB, 18.5 ms; 64:
+  0.7 GiB, 9.1 ms)'

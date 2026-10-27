@@ -1,0 +1,6 @@
+id: l1_006_matmul_with_large_k_dimension
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/6_Matmul_with_large_K_dimension_.py@423217d9fda9
+notes:
+- float16 reference output is not finite

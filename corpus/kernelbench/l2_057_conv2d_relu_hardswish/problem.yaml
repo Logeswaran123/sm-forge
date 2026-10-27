@@ -1,0 +1,6 @@
+id: l2_057_conv2d_relu_hardswish
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/57_Conv2d_ReLU_HardSwish.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 0.8 GiB, 5.3 ms)'

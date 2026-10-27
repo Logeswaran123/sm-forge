@@ -1,0 +1,4 @@
+id: l2_070_gemm_sigmoid_scaling_residualadd
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/70_Gemm_Sigmoid_Scaling_ResidualAdd.py@423217d9fda9

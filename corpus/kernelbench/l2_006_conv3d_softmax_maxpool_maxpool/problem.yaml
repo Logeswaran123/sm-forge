@@ -1,0 +1,4 @@
+id: l2_006_conv3d_softmax_maxpool_maxpool
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/6_Conv3d_Softmax_MaxPool_MaxPool.py@423217d9fda9

@@ -1,0 +1,6 @@
+id: l2_026_convtranspose3d_add_hardswish
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/26_ConvTranspose3d_Add_HardSwish.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 2.0 GiB, 9.1 ms)'

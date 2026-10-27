@@ -1,0 +1,4 @@
+id: l2_028_bmm_instancenorm_sum_residualadd_multiply
+source: kernelbench
+family: bmm
+upstream: KernelBench/level2/28_BMM_InstanceNorm_Sum_ResidualAdd_Multiply.py@423217d9fda9

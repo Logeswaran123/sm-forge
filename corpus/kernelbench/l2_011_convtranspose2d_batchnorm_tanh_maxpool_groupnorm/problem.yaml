@@ -1,0 +1,7 @@
+id: l2_011_convtranspose2d_batchnorm_tanh_maxpool_groupnorm
+source: kernelbench
+family: convtranspose2d
+upstream: KernelBench/level2/11_ConvTranspose2d_BatchNorm_Tanh_MaxPool_GroupNorm.py@423217d9fda9
+notes:
+- float16 reference differs from float32 by up to 0.0227
+- bfloat16 reference differs from float32 by up to 0.0416

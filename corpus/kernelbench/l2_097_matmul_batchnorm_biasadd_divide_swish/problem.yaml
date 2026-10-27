@@ -1,0 +1,4 @@
+id: l2_097_matmul_batchnorm_biasadd_divide_swish
+source: kernelbench
+family: matmul
+upstream: KernelBench/level2/97_Matmul_BatchNorm_BiasAdd_Divide_Swish.py@423217d9fda9

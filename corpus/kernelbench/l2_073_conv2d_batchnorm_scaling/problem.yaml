@@ -1,0 +1,4 @@
+id: l2_073_conv2d_batchnorm_scaling
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/73_Conv2d_BatchNorm_Scaling.py@423217d9fda9

@@ -1,0 +1,4 @@
+id: l2_012_gemm_multiply_leakyrelu
+source: kernelbench
+family: gemm
+upstream: KernelBench/level2/12_Gemm_Multiply_LeakyReLU.py@423217d9fda9

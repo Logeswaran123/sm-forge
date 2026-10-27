@@ -1,0 +1,37 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, INPUT_SIZE]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- input_size: INPUT_SIZE
+- hidden_size: HIDDEN_SIZE
+- output_size: OUTPUT_SIZE
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 16384
+    INPUT_SIZE: 2048
+    HIDDEN_SIZE: 4096
+    OUTPUT_SIZE: 1024
+  flop: 412316860416
+  bytes: 92317696
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    INPUT_SIZE: 2048
+    HIDDEN_SIZE: 4096
+    OUTPUT_SIZE: 1024
+  flop: 75497472
+  bytes: 25188358
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 16384
+    INPUT_SIZE: 2048
+    HIDDEN_SIZE: 4096
+    OUTPUT_SIZE: 1024

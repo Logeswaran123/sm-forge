@@ -1,0 +1,7 @@
+id: l2_027_conv3d_hardswish_groupnorm_mean
+source: kernelbench
+family: conv3d
+upstream: KernelBench/level2/27_Conv3d_HardSwish_GroupNorm_Mean.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 1024 -> 256 to fit 4 GiB and 5 ms in float16 (1024: 0.8 GiB, 15.9 ms;
+  512: 0.4 GiB, 7.9 ms)'

@@ -1,0 +1,7 @@
+id: l2_003_convtranspose3d_sum_layernorm_avgpool_gelu
+source: kernelbench
+family: convtranspose3d
+upstream: KernelBench/level2/3_ConvTranspose3d_Sum_LayerNorm_AvgPool_GELU.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 32 -> 8 to fit 4 GiB and 5 ms in float16 (32: 1.1 GiB, 13.4 ms; 16:
+  0.5 GiB, 6.6 ms)'

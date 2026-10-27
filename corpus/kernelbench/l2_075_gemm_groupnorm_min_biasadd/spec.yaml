@@ -1,0 +1,38 @@
+inputs:
+  x0:
+    shape: [BATCH_SIZE, IN_FEATURES]
+    dtype: float32
+    range: [0.0, 1.0]
+inits:
+- in_features: IN_FEATURES
+- out_features: OUT_FEATURES
+- num_groups: NUM_GROUPS
+- bias_shape: [1, OUT_FEATURES, 1, 1]
+default_variant: bench-gpu
+bench-gpu:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 1024
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    NUM_GROUPS: 512
+  flop: 137438953472
+  bytes: 167837696
+ci:
+- params: [x0]
+  dtype: float16
+  dims:
+    BATCH_SIZE: 3
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    NUM_GROUPS: 512
+  flop: 402653184
+  bytes: 134381568
+kernelbench:
+- params: [x0]
+  dims:
+    BATCH_SIZE: 1024
+    IN_FEATURES: 8192
+    OUT_FEATURES: 8192
+    NUM_GROUPS: 512

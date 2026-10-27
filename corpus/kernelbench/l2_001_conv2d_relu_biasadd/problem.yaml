@@ -1,0 +1,6 @@
+id: l2_001_conv2d_relu_biasadd
+source: kernelbench
+family: conv2d
+upstream: KernelBench/level2/1_Conv2D_ReLU_BiasAdd.py@423217d9fda9
+notes:
+- 'BATCH_SIZE 128 -> 64 to fit 4 GiB and 5 ms in float16 (128: 1.5 GiB, 8.3 ms)'

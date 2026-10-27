@@ -1,0 +1,7 @@
+id: l1_007_matmul_with_small_k_dimension
+source: kernelbench
+family: matmul
+upstream: KernelBench/level1/7_Matmul_with_small_K_dimension_.py@423217d9fda9
+notes:
+- 'M 32768 -> 16384 to fit 4 GiB and 5 ms in float16 (32768: OutOfMemoryError: CUDA
+  out of memory. Tried to allocate 16.00 GiB. GPU 0 has a t)'
