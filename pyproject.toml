@@ -18,6 +18,9 @@ cu128 = [
   "triton>=3.5",
   "cuda-bindings>=12.8",
 ]
+plot = [
+  "matplotlib>=3.8",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.9",
