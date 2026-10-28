@@ -2,12 +2,18 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
 from smforge.agents.cover import cover
 from smforge.config import LLMConfig
 from smforge.llm import claude_code
 from smforge.llm.claude_code import ClaudeCodeClient, ClaudeCodeError
 from smforge.llm.client import LLMClient, create_client
+from smforge.llm.structured import ask
+
+
+class Primes(BaseModel):
+    primes: list[int]
 
 
 def result(text: str, session: str = "s1", cost: float = 0.25, error: bool = False) -> str:
@@ -80,3 +86,14 @@ def test_errors(calls):
         llm.complete("system", [{"role": "user", "content": "x"}])
     with pytest.raises(ClaudeCodeError, match="exited with code 0"):
         llm.complete("system", [{"role": "user", "content": "x"}])
+
+
+def test_structured_reply(calls):
+    log, replies = calls
+    replies.append(result('{"primes": [2, 3]}'))
+    llm = ClaudeCodeClient(LLMConfig(backend="claude-code", claude_bin="/bin/claude"))
+    parsed, _ = ask(llm, "system", [{"role": "user", "content": "two primes"}], Primes)
+    assert parsed.primes == [2, 3]
+    command = log[0]["command"]
+    schema = json.loads(command[command.index("--json-schema") + 1])
+    assert schema["required"] == ["primes"] and schema["additionalProperties"] is False

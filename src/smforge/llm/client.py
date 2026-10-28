@@ -63,7 +63,9 @@ class Completer(Protocol):
     config: LLMConfig
     usage: Usage
 
-    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply: ...
+    def complete(
+        self, system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+    ) -> Reply: ...
 
 
 class Refused(RuntimeError):
@@ -89,15 +91,20 @@ class LLMClient:
         self.usage = Usage()
         self._client: anthropic.Anthropic | None = None
 
-    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
+    def complete(
+        self, system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+    ) -> Reply:
         check_budget(self.config, self.usage)
+        output_config: dict[str, Any] = {"effort": self.config.effort_for(role)}
+        if schema is not None:
+            output_config["format"] = {"type": "json_schema", "schema": schema}
         request = {
             "model": self.config.model,
             "max_tokens": self.config.max_tokens,
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "messages": messages,
             "cache_control": {"type": "ephemeral"},
-            "output_config": {"effort": self.config.effort_for(role)},
+            "output_config": output_config,
             "betas": [FALLBACK_BETA],
             "fallbacks": "default",
         }
@@ -142,10 +149,12 @@ class Recorder:
         self.config = client.config
         self.usage = client.usage
 
-    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
-        reply = self.client.complete(system, messages, role)
+    def complete(
+        self, system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+    ) -> Reply:
+        reply = self.client.complete(system, messages, role, schema)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        record = {"key": prompt_key(system, messages, role), **_recorded(reply)}
+        record = {"key": prompt_key(system, messages, role, schema), **_recorded(reply)}
         with self.path.open("a") as f:
             f.write(json.dumps(record) + "\n")
         return reply
@@ -162,8 +171,10 @@ class ReplayClient:
             record = json.loads(line)
             self.replies[record.pop("key")] = record
 
-    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
-        key = prompt_key(system, messages, role)
+    def complete(
+        self, system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+    ) -> Reply:
+        key = prompt_key(system, messages, role, schema)
         if key not in self.replies:
             raise ReplayMiss(f"no recorded reply for prompt {key}")
         record = self.replies[key]
@@ -197,14 +208,18 @@ def create_client(
     return Recorder(client, record) if record is not None else client
 
 
-def prompt_key(system: str, messages: list[dict], role: str | None = None) -> str:
+def prompt_key(
+    system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+) -> str:
     """A hash of the prompt's text, the same whether replies carry SDK blocks or plain text.
 
     Decimal numbers and rates are masked, so a prompt that quotes timings maps to the same key
     when the measurements differ slightly from the recorded run.
     """
     turns = [{"role": m["role"], "text": _MEASURED.sub("#", _text(m["content"]))} for m in messages]
-    body = json.dumps({"system": system, "messages": turns, "role": role}, sort_keys=True)
+    body = json.dumps(
+        {"system": system, "messages": turns, "role": role, "schema": schema}, sort_keys=True
+    )
     return hashlib.sha256(body.encode()).hexdigest()[:16]
 
 
