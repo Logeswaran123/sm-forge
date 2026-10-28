@@ -53,6 +53,11 @@ def test_launch_parameters():
     assert checks(validate_source(code)) == ["block_pow2", "dot_min_dim", "num_stages", "num_warps"]
 
 
+def test_tuple_assigned_blocks():
+    code = GOOD + "\nBLOCK_M, BLOCK_N, BLOCK_K = 64, 48, 8\n"
+    assert checks(validate_source(code)) == ["block_pow2", "dot_min_dim"]
+
+
 def test_arange_length():
     code = GOOD.replace("tl.arange(0, BLOCK_M)", "tl.arange(0, 48)")
     issues = validate_source(code)
