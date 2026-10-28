@@ -62,3 +62,35 @@ gemm_transposed_operand_strides:
   speedup: 1.103
   triton: 3.6.0
   date: '2026-10-27'
+layernorm_one_kernel:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 94.37
+  after_us: 61.44
+  speedup: 1.536
+  triton: 3.6.0
+  date: '2026-10-27'
+mean_dim_wide_tiles:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3684.16
+  after_us: 2437.18
+  speedup: 1.512
+  triton: 3.6.0
+  date: '2026-10-27'
+softmax_online_normalizer:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 393.25
+  after_us: 320.48
+  speedup: 1.227
+  triton: 3.6.0
+  date: '2026-10-27'
+sum_after_linear:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 10963.52
+  after_us: 394.5
+  speedup: 27.791
+  triton: 3.6.0
+  date: '2026-10-27'

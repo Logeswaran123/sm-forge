@@ -151,3 +151,105 @@ constraints:
   correct: |
     @triton.autotune(configs=configs, key=["M", "N", "K"], reset_to_zero=["ws_ptr"])
   check: {problem: l1_006_matmul_with_large_k_dimension, expect: mismatch}
+
+- id: row_block_covers_the_row
+  severity: critical
+  stages: []
+  rule: >-
+    A kernel that loads a whole row in one tl.load needs BLOCK >= the row length:
+    BLOCK = triton.next_power_of_2(N), with the tail masked. A smaller fixed BLOCK silently
+    reduces over the first BLOCK columns only. Rows too long for registers need a loop over
+    BLOCK-sized chunks instead.
+  wrong: |
+    BLOCK = 1024  # N = 4096
+    x = tl.load(x_ptr + row * stride + offs, mask=offs < N, other=0.0)
+  correct: |
+    BLOCK = triton.next_power_of_2(N)
+  check: {problem: inf_rmsnorm, expect: mismatch}
+
+- id: no_torch_compute_in_forward
+  severity: critical
+  stages: []
+  rule: >-
+    forward and the helpers it calls may only allocate tensors and change views, layouts and
+    dtypes. Every arithmetic op, reduction and activation has to run in a Triton kernel;
+    torch.relu, F.*, .sum(), @ and submodule calls fail the audit, as does any cuBLAS, cuDNN
+    or ATen compute kernel in the launch profile.
+  wrong: |
+    gemm_kernel[grid](x, w, out, ...)
+    return torch.relu(out)
+  correct: |
+    # tl.maximum(acc, 0.0) in the kernel's epilogue
+    gemm_relu_kernel[grid](x, w, out, ...)
+    return out
+  check: {problem: l2_076_gemm_add_relu, expect: static, match: torch_compute_call}
+
+- id: no_host_sync_in_forward
+  severity: warning
+  stages: []
+  rule: >-
+    Nothing in forward may wait for the GPU: no .item(), .cpu(), .tolist(), printing device
+    tensors or torch.cuda.synchronize(). A sync drains the launch queue, so the next kernel
+    starts only after the CPU has caught up.
+  wrong: |
+    kernel[grid](...)
+    torch.cuda.synchronize()
+    return out
+  correct: |
+    kernel[grid](...)
+    return out
+  check: {problem: l2_076_gemm_add_relu, expect: static, match: host_sync}
+
+- id: arange_length_power_of_two
+  severity: critical
+  stages: []
+  rule: >-
+    tl.arange(start, end) needs end - start to be a power of two. Cover other lengths with a
+    power-of-two block and a mask.
+  wrong: |
+    offs_k = tl.arange(0, 96)
+  correct: |
+    offs_k = tl.arange(0, 128)
+    mask_k = offs_k < 96
+  check: {problem: l2_076_gemm_add_relu, expect: static, match: arange_pow2}
+
+- id: num_warps_power_of_two
+  severity: critical
+  stages: [device_specific, autotuning]
+  rule: >-
+    num_warps must be a power of two (1 to 32); Triton lays out tensors across warps by
+    halving.
+  wrong: |
+    kernel[grid](..., num_warps=6)
+  correct: |
+    kernel[grid](..., num_warps=4)
+  check: {problem: l2_076_gemm_add_relu, expect: static, match: num_warps}
+
+- id: no_output_caching
+  severity: critical
+  stages: []
+  rule: >-
+    forward must compute its result from the inputs on every call. Returning a tensor kept
+    from an earlier call fails the second input draw of the correctness check.
+  wrong: |
+    def forward(self, x):
+        if hasattr(self, "_out"):
+            return self._out
+        self._out = self._forward(x)
+        return self._out
+  correct: |
+    def forward(self, x):
+        return self._forward(x)
+  check: {problem: l2_076_gemm_add_relu, expect: mismatch}
+
+- id: mask_tail_stores
+  severity: critical
+  stages: []
+  rule: >-
+    Mask tl.store with the same bounds as the loads. An unmasked store of a tail tile writes
+    past the row into the next one, or past the allocation into other tensors.
+  wrong: |
+    tl.store(c_ptrs, c)
+  correct: |
+    tl.store(c_ptrs, c, mask=mask_m[:, None] & mask_n[None, :])
+  check: {problem: l1_008_matmul_with_irregular_shapes, expect: mismatch}

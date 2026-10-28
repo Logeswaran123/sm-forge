@@ -1,0 +1,13 @@
+patterns:
+- id: reduce_before_linear
+  stage: algorithmic
+  applies_to: [gemm, matmul, conv2d, conv3d, convtranspose2d, convtranspose3d]
+  summary: >-
+    When a linear op (GEMM, convolution) is followed by a sum or mean over its output
+    features or positions, reduce first: sum over N of x @ W.T equals x @ (sum over N of W).
+  how: >-
+    Push the reduction through the linear op, then compute the smaller product. For
+    sum(x @ W.T, dim=1) compute w_sum = W.sum(0) in a kernel and a row dot x @ w_sum: one
+    GEMV instead of a GEMM. Only scales, adds and other linear steps may sit between the
+    linear op and the reduction. Recompute w_sum on every call from the current weights.
+  example: sum_after_linear

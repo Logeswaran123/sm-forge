@@ -23,3 +23,15 @@ examples:
 - id: gemm_split_k
   problem: l1_006_matmul_with_large_k_dimension
   description: 16 programs each looping over K = 524288 replaced by a 64-way split-K and a reduction kernel.
+- id: sum_after_linear
+  problem: l2_014_gemm_divide_sum_scaling
+  description: Full float32 GEMM then a row sum, replaced by a column sum of W and one row dot per input.
+- id: softmax_online_normalizer
+  problem: inf_softmax_vocab
+  description: Three passes over each 128256-wide row (max, sum, write) cut to two with an online normalizer.
+- id: layernorm_one_kernel
+  problem: inf_layernorm
+  description: Mean, rstd and normalize kernels merged into one program per row.
+- id: mean_dim_wide_tiles
+  problem: l1_048_mean_reduction_over_a_dimension
+  description: Mean over dim 1 of [64, 4096, 4095] with 256x16 tiles changed to 1024x8.

@@ -22,3 +22,28 @@ patterns:
     of launches pays launch latency per batch and leaves the GPU idle whenever one launch has
     too few tiles to fill the SMs.
   example: bmm_batch_in_grid
+
+- id: online_softmax
+  stage: fusion
+  applies_to: [softmax, attention, loss]
+  summary: >-
+    Compute the softmax normalizer in one pass over the row with a running max and a running
+    sum rescaled by exp(m_old - m_new), instead of separate passes for the max and the sum.
+  how: >-
+    Keep per-lane m and s in float32. For each block: m_new = max(m, x), s = s * exp(m - m_new)
+    + exp(x - m_new). Combine lanes at the end, then write exp(x - m) / s in a second pass.
+    Guard m_new == -inf for lanes that have seen only masked values. This saves one full
+    read of the row.
+  example: softmax_online_normalizer
+
+- id: row_stats_and_normalize_in_one_kernel
+  stage: fusion
+  applies_to: [norm, any]
+  summary: >-
+    Compute a row's statistics and normalize it in the same program while the row is in
+    registers, instead of separate kernels for the mean, the variance and the output.
+  how: >-
+    One program per row loads the row once (BLOCK = next_power_of_2(N)), computes the mean,
+    the variance from x - mean, and writes (x - mean) * rstd * w + b. Separate kernels read
+    the row once per statistic and pay a launch each.
+  example: layernorm_one_kernel

@@ -22,3 +22,15 @@ patterns:
     * stride_m; tl.dot takes the tile in either layout. A contiguous copy is a full extra read
     and write of the operand per forward.
   example: gemm_transposed_operand_strides
+
+- id: reduction_tiles_along_the_contiguous_dim
+  stage: memory_access
+  applies_to: [reduction, norm]
+  summary: >-
+    When reducing over a strided dim of x[outer, R, inner], make tiles wide along the
+    contiguous inner dim and short along R.
+  how: >-
+    Each program owns BLOCK_N contiguous inner columns and loops over R in BLOCK_R rows. Wide
+    BLOCK_N (1024) gives each warp long contiguous segments to load; a narrow BLOCK_N with
+    tall BLOCK_R spreads the same bytes over many short, separately addressed segments.
+  example: mean_dim_wide_tiles
