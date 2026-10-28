@@ -1,0 +1,13 @@
+patterns:
+- id: autotune_small_config_space
+  stage: autotuning
+  applies_to: [gemm, matmul, bmm, conv2d, conv3d, attention]
+  summary: >-
+    Wrap the kernel in @triton.autotune over 4 to 12 configs that vary tile shape, warps and
+    stages, keyed on the problem dimensions, instead of one hard-coded config.
+  how: >-
+    List configs that fit the shared-memory and register budgets, set key=["M", "N", "K"] so
+    a new shape retunes, make the grid a function of meta, and drop the constexprs from the
+    launch. Kernels that accumulate into an argument need reset_to_zero. Tuning runs once per
+    key, outside the timed region.
+  example: gemm_autotune

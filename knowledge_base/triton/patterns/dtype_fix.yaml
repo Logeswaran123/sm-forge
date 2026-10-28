@@ -1,0 +1,25 @@
+patterns:
+- id: low_precision_operands_fp32_accumulate
+  stage: dtype_fix
+  applies_to: [gemm, matmul, bmm, conv2d, conv3d, convtranspose2d, convtranspose3d, attention]
+  summary: >-
+    Feed tl.dot the problem's fp16 or bf16 tensors directly and accumulate in float32. Do not
+    upcast operands to float32 in the wrapper or before the dot.
+  how: >-
+    Load tiles in the input dtype, call tl.dot(a, b, acc) with a float32 acc, and cast once
+    when storing. Upcasting costs a copy of every operand and turns half-precision MMA into
+    TF32 MMA, which has half the throughput, or into FMA.
+  example: gemm_fp16_operands
+
+- id: fp8_native_dot
+  stage: dtype_fix
+  requires: [mma_fp8]
+  applies_to: [gemm_fp8, gemm, matmul]
+  summary: >-
+    Pass float8_e4m3fn tiles straight to tl.dot with a float32 accumulator, instead of
+    converting them to bf16 or fp16 first.
+  how: >-
+    On sm_89 and later tl.dot lowers fp8 x fp8 to fp8 MMA (QMMA on sm_120) at twice the bf16
+    rate. Apply the per-tensor or per-row scales to the fp32 accumulator in the epilogue.
+    Converting tiles to bf16 costs the conversion and halves the MMA rate.
+  example: fp8_native_dot

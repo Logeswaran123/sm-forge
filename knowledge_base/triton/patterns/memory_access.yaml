@@ -1,0 +1,48 @@
+patterns:
+- id: grid_raster_order
+  stage: memory_access
+  applies_to: [gemm, matmul]
+  summary: >-
+    Order the grid so that programs launched together share a tile of the larger operand,
+    which then stays in L2 while they use it.
+  how: >-
+    For x[M, K] @ W[N, K].T with W much larger than x, let program_id(0) walk M and
+    program_id(1) walk N: consecutive programs reuse the same weight columns. With the axes
+    swapped, every program streams a different slice of W.
+  example: gemm_raster_order
+
+- id: transposed_operand_via_strides
+  stage: memory_access
+  applies_to: [gemm, matmul, bmm]
+  summary: >-
+    Read a transposed operand through its strides instead of materializing it with
+    .t().contiguous() on every call.
+  how: >-
+    Pass the view's strides and index the tile as offs_k[:, None] * stride_k + offs_m[None, :]
+    * stride_m; tl.dot takes the tile in either layout. A contiguous copy is a full extra read
+    and write of the operand per forward.
+  example: gemm_transposed_operand_strides
+
+- id: reduction_tiles_along_the_contiguous_dim
+  stage: memory_access
+  applies_to: [reduction, norm]
+  summary: >-
+    When reducing over a strided dim of x[outer, R, inner], make tiles wide along the
+    contiguous inner dim and short along R.
+  how: >-
+    Each program owns BLOCK_N contiguous inner columns and loops over R in BLOCK_R rows. Wide
+    BLOCK_N (1024) gives each warp long contiguous segments to load; a narrow BLOCK_N with
+    tall BLOCK_R spreads the same bytes over many short, separately addressed segments.
+  example: mean_dim_wide_tiles
+
+- id: elementwise_elements_per_thread
+  stage: memory_access
+  applies_to: [activation, any]
+  summary: >-
+    Give each thread of an elementwise kernel several contiguous elements: BLOCK of at least
+    8 * 32 * num_warps, for example 4096 with 8 warps.
+  how: >-
+    With BLOCK = 128 and 4 warps each thread handles one element, so loads cannot be
+    vectorized and the scheduler handles many more tiny programs. Larger blocks let each
+    thread issue 16-byte loads.
+  example: gelu_block_size

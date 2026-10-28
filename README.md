@@ -75,6 +75,22 @@ smforge corpus baselines --modes eager,compile,seed    # writes results/baseline
 python scripts/roofline.py                 # plots/roofline.png
 ```
 
+## Knowledge base
+
+`knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.
+Every entry comes with a kernel pair on a dev-split problem. A constraint's `wrong.py` must fail
+the way the entry says (static check, error, mismatch, or slower) and its `correct.py` must pass.
+A pattern's `after.py` must pass the candidate checks and beat `before.py` in an interleaved
+A/B comparison on the GPU. Measured speedups go to `examples/measured.yaml` and stay out of
+prompts.
+
+```bash
+smforge kb list                              # entries, stages, measured speedups
+smforge kb show fusion --families gemm       # a stage's slice as a prompt receives it
+smforge kb verify [--ids a,b] [--write]      # run every pair on this GPU
+pytest runners/test_kb_examples.py           # the same checks as tests
+```
+
 ## Tests
 
 ```bash

@@ -282,8 +282,9 @@ sm-forge/
       ncu.py                  # stage 6: ncu / nsys runners and parsers
       sanitizer.py            # stage 6: compute-sanitizer wrapper
     kb/
-      schema.py
-      loader.py               # arch filter, stage slices, token budget
+      schema.py               # constraints, patterns, examples, measurements
+      loader.py               # arch and probe filter, stage slices, token budget
+      verify.py               # runs each entry's kernel pair on the GPU
     llm/
       client.py               # SDK wrapper: caching, structured output, usage, cost cap, replay
       prompts/                # jinja templates per role and stage
@@ -301,10 +302,11 @@ sm-forge/
       cuda_cpp.py             # stage 7
     tile_search/              # stage 7
   knowledge_base/
-    triton/common/*.yaml
-    triton/nvidia/*.yaml
-    triton/nvidia/examples/{index.yaml,*.py}
-    cuda/nvidia/*.yaml        # stage 7
+    triton/constraints.yaml
+    triton/patterns/<stage>.yaml
+    triton/checks/<constraint>/{wrong.py,correct.py}
+    triton/examples/{index.yaml,measured.yaml,<example>/{before.py,after.py}}
+    cuda/                     # stage 7
   corpus/
     <id>/{reference.py,kernel.py,spec.yaml}
     splits.yaml               # dev / eval
@@ -447,34 +449,38 @@ TFLOPS for l2_077. Not done: Xe-Forge's test and vLLM kernels, and `max-autotune
 
 ### Stage 3: knowledge base
 
-Schema (YAML, validated with pydantic):
+Schema (YAML, validated with pydantic in `kb/schema.py`):
 
 ```yaml
+# constraints.yaml
 constraints:
   - id: smem_budget_per_config
     severity: critical
+    stages: [tensor_descriptors, device_specific, autotuning]   # empty: every stage
     arch: {min: 80}
-    stages: [device_specific, autotuning]
-    rule: "num_stages * (BM*BK + BK*BN) * elem_bytes <= shared_memory_per_block_optin"
+    requires: []                  # device probes that must pass
+    rule: "num_stages * (BLOCK_M*BLOCK_K + BLOCK_K*BLOCK_N) * elem_bytes <= the opt-in limit"
     wrong: |
-      triton.Config({"BM": 128, "BN": 256, "BK": 64}, num_stages=4)
+      BLOCK_M, BLOCK_N, BLOCK_K = 256, 256, 64
     correct: |
-      # prune_configs_by drops configs over the device's smem budget
+      BLOCK_M, BLOCK_N, BLOCK_K = 64, 64, 32
+    check: {problem: l1_002_standard_matrix_multiplication, expect: error, match: shared memory}
+# patterns/<stage>.yaml
 patterns:
-  - id: gemm_group_m_swizzle
-    stage: device_specific
-    arch: {min: 80}
-    requires: []
-    applies_to: [gemm, matmul, bmm]
-    before: examples/gemm_noswizzle.py
-    after: examples/gemm_swizzle.py
-    rationale: L2 reuse across CTAs launched together
-    measured:
-      - {gpu: rtx5080, variant: bench-gpu, speedup: null}
+  - id: split_k_for_small_mn
+    stage: persistent_kernel
+    applies_to: [gemm, matmul]
+    summary: ...
+    how: ...
+    example: gemm_split_k         # examples/gemm_split_k/{before.py,after.py}
 ```
 
-`measured` is written by `runners/test_kb_examples.py`, never by hand. Prompts do not show
-speedups. Xe-Forge's Claude template tells the agent to ignore them, and this KB leaves them out.
+A constraint's `checks/<id>/wrong.py` must fail as `check.expect` says (`static`, `error`,
+`mismatch` or `slower`) and its `correct.py` must pass the candidate checks. A pattern's example
+runs on a dev-split problem: `after.py` must pass the candidate checks and beat `before.py` in an
+interleaved A/B comparison. Speedups are written to `examples/measured.yaml` by
+`smforge kb verify --write`, never by hand. Prompts do not show speedups. Xe-Forge's Claude
+template tells the agent to ignore them, and this KB leaves them out.
 
 First content. Each entry is verified on the RTX 5080 before it goes in.
 
@@ -515,6 +521,29 @@ matches the kernel's op families, and cap each stage at a token budget (start at
 
 Exit: at least 60 entries, each with a before/after test passing on the RTX 5080.
 `runners/test_kb_examples.py` passes.
+
+Result (2026-10-27): 39 entries, 18 constraints and 21 patterns, every one verified on the RTX
+5080 with a pair from the dev split; the exit's 60 is not reached. All eight stages have at
+least one pattern. Pattern speedups range from 1.04x (GEMM epilogue fusion, where the GEMM
+dominates) to 27.8x (reducing before a linear op). These measured at parity or worse on sm_120
+and are left out:
+
+| Candidate | Measured |
+|---|---|
+| GROUP_M swizzle on a 1024x8192x8192 GEMM | 1.00x; the 64 MB L2 already holds the reuse |
+| EVEN_K specialization (no K masks) | 0.99x |
+| TMA tensor descriptors instead of pointer loads | 1.00x at 64x64x64, 0.80x at 128x128x32 |
+| 128x128 GEMM tiles with 8 warps | 0.88x against 64x64x64 with 4 warps |
+| More warps for a 4096-wide RMSNorm row | 1.00x |
+| Fused add + RMSNorm instead of two kernels | 0.94x; the 32 MB intermediate stays in L2 |
+| Split group-norm statistics over 112 groups | 1.00x |
+| Unmasked key blocks below the causal diagonal | 1.00x to 1.02x |
+| One program per GQA query head in paged decode | 1.30x over grouping, but 924 us against 777 us for split-KV |
+
+Two constraints could not be shown failing on these problems and are left out: a softmax tail
+padded with 0 instead of -inf shifts the sum by about 1% on 128256-wide rows, inside bf16
+tolerance, and eval-mode batch norm with fresh running statistics matches batch statistics on
+randn inputs.
 
 ### Stage 4: LLM client and CoVeR
 

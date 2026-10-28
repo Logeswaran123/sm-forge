@@ -156,8 +156,19 @@ def _int_constants(tree: ast.AST) -> list[tuple[str, int, int]]:
                 if isinstance(k, ast.Constant) and isinstance(k.value, str)
             ]
         elif isinstance(node, ast.Assign) and len(node.targets) == 1:
-            if isinstance(node.targets[0], ast.Name):
-                pairs = [(node.targets[0].id, node.value)]
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                pairs = [(target.id, node.value)]
+            elif (
+                isinstance(target, ast.Tuple)
+                and isinstance(node.value, ast.Tuple)
+                and len(target.elts) == len(node.value.elts)
+            ):
+                pairs = [
+                    (t.id, v)
+                    for t, v in zip(target.elts, node.value.elts, strict=True)
+                    if isinstance(t, ast.Name)
+                ]
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value:
             pairs = [(node.target.id, node.value)]
         for name, value in pairs:

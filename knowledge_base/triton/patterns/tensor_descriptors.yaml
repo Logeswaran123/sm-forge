@@ -1,0 +1,14 @@
+patterns:
+- id: cp_async_pipelining
+  stage: tensor_descriptors
+  requires: [cp_async]
+  applies_to: [gemm, matmul, bmm, conv2d, conv3d, convtranspose2d, convtranspose3d, attention]
+  summary: >-
+    Pipeline the K loop's loads with num_stages >= 2, so the next tiles stream into shared
+    memory (cp.async) while tensor cores work on the current ones.
+  how: >-
+    Set num_stages=3 on the launch or in each autotune config. Triton turns the loads of a
+    loop that feeds tl.dot into asynchronous copies with that many buffers. Each stage costs
+    (BLOCK_M*BLOCK_K + BLOCK_K*BLOCK_N) * elem_bytes of shared memory, so check the budget.
+    With num_stages=1 every iteration waits for its loads.
+  example: gemm_num_stages
