@@ -38,7 +38,7 @@ class ClaudeCodeClient:
             raise ClaudeCodeError("claude not found; install Claude Code or set CLAUDE_BIN")
         return found
 
-    def complete(self, system: str, messages: list[dict]) -> Reply:
+    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
         check_budget(self.config, self.usage)
         if len(messages) == 1:
             self._session = None
@@ -53,7 +53,7 @@ class ClaudeCodeClient:
             "--model",
             self.config.model,
             "--effort",
-            self.config.effort,
+            self.config.effort_for(role),
             "--system-prompt",
             system,
         ]
@@ -79,7 +79,7 @@ class ClaudeCodeClient:
         usage = data.get("usage", {})
         reply = Reply(
             text=data.get("result", ""),
-            content=[],
+            content=[{"type": "text", "text": data.get("result", "")}],
             model=self.config.model,
             stop_reason=data.get("stop_reason"),
             usage=Usage(

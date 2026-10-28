@@ -30,8 +30,14 @@ class LLMConfig(BaseModel):
     claude_bin: str | None = None
     model: str = "claude-opus-5-5"
     effort: str = "high"
+    efforts: dict[str, str] = Field(default_factory=lambda: {"planner": "low"})
     max_tokens: int = 64000
+    max_retries: int = 4
     budget_usd: float | None = None
+
+    def effort_for(self, role: str | None) -> str:
+        """The effort for a role (seed, optimizer, analyzer, planner), else the default."""
+        return self.efforts.get(role, self.effort) if role else self.effort
 
 
 class Config(BaseModel):

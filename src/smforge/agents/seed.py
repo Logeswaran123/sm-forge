@@ -113,6 +113,7 @@ def seed_problem(
         task_prompt(problem, spec),
         verifier(problem, spec, runner, workdir),
         max_iters,
+        role="seed",
     )
     (workdir / "attempts.json").write_text(
         json.dumps(
