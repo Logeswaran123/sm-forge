@@ -1,7 +1,7 @@
 import pytest
 
 from smforge.config import CorrectnessConfig
-from smforge.harness.audit import audit_launches, audit_source, classify_launch
+from smforge.harness.audit import audit_interface, audit_launches, audit_source, classify_launch
 from smforge.harness.tolerance import resolve_tolerance
 from smforge.models import Launch, LaunchCategory, LaunchProfile
 from smforge.spec import Variant
@@ -146,3 +146,35 @@ def test_tolerance_precedence():
     assert resolve_tolerance("float16", variant, config) == (1e-3, 5e-2)
     assert resolve_tolerance("float16", variant, config, rtol=0.5, atol=0.0) == (0.5, 0.0)
     assert resolve_tolerance("int32") == (0.0, 0.0)
+
+
+INTERFACE = """
+import torch
+from torch import nn
+
+
+class Model(nn.Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
+def get_inputs():
+    return [torch.randn(8, 16)]
+
+
+def get_init_inputs():
+    return [16, 32]
+"""
+
+
+def test_audit_interface():
+    assert audit_interface(INTERFACE + "\n# tuned\n", INTERFACE) == []
+    renamed = INTERFACE.replace("in_features, out_features", "in_features, out_features, bias=True")
+    assert checks(audit_interface(renamed, INTERFACE)) == ["interface_init"]
+    shapes = INTERFACE.replace("torch.randn(8, 16)", "torch.randn(4, 16)")
+    assert checks(audit_interface(shapes, INTERFACE)) == ["interface_inputs"]
+    dropped = INTERFACE[: INTERFACE.index("def get_init_inputs")]
+    assert checks(audit_interface(dropped, INTERFACE)) == ["interface_inputs"]
