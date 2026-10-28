@@ -1,0 +1,24 @@
+patterns:
+- id: grid_raster_order
+  stage: memory_access
+  applies_to: [gemm, matmul]
+  summary: >-
+    Order the grid so that programs launched together share a tile of the larger operand,
+    which then stays in L2 while they use it.
+  how: >-
+    For x[M, K] @ W[N, K].T with W much larger than x, let program_id(0) walk M and
+    program_id(1) walk N: consecutive programs reuse the same weight columns. With the axes
+    swapped, every program streams a different slice of W.
+  example: gemm_raster_order
+
+- id: transposed_operand_via_strides
+  stage: memory_access
+  applies_to: [gemm, matmul, bmm]
+  summary: >-
+    Read a transposed operand through its strides instead of materializing it with
+    .t().contiguous() on every call.
+  how: >-
+    Pass the view's strides and index the tile as offs_k[:, None] * stride_k + offs_m[None, :]
+    * stride_m; tl.dot takes the tile in either layout. A contiguous copy is a full extra read
+    and write of the operand per forward.
+  example: gemm_transposed_operand_strides

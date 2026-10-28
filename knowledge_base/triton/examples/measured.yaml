@@ -1,0 +1,64 @@
+bmm_batch_in_grid:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3905.34
+  after_us: 2332.8
+  speedup: 1.674
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_epilogue_fusion:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1283.07
+  after_us: 1238.02
+  speedup: 1.036
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_fp16_operands:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3021.92
+  after_us: 1236.99
+  speedup: 2.443
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_num_stages:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1228.58
+  after_us: 1167.33
+  speedup: 1.052
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_raster_order:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1477.57
+  after_us: 1237.98
+  speedup: 1.194
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_sm120_tiles:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1406.94
+  after_us: 1187.84
+  speedup: 1.184
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_split_k:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3574.82
+  after_us: 708.64
+  speedup: 5.045
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_transposed_operand_strides:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1538.3
+  after_us: 1394.82
+  speedup: 1.103
+  triton: 3.6.0
+  date: '2026-10-27'

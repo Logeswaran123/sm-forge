@@ -1,0 +1,24 @@
+patterns:
+- id: gemm_epilogue_fusion
+  stage: fusion
+  applies_to: [gemm, matmul, bmm]
+  summary: >-
+    Apply bias, activations, scales and residual adds to the fp32 accumulator before the
+    GEMM's store, instead of writing C and running elementwise kernels over it.
+  how: >-
+    After the K loop, load the per-column vectors (bias, scale) once per tile with the N mask,
+    apply the elementwise chain on acc in float32, then cast and store. Each separate
+    elementwise kernel costs a full read and write of C.
+  example: gemm_epilogue_fusion
+
+- id: batch_in_one_launch
+  stage: fusion
+  applies_to: [bmm, attention, moe, any]
+  summary: >-
+    Put the batch (or head, or expert) index on a grid axis and launch once, instead of a
+    Python loop that launches one kernel per batch.
+  how: >-
+    Use grid = (tiles, batch) and offset every pointer by program_id(1) * batch_stride. A loop
+    of launches pays launch latency per batch and leaves the GPU idle whenever one launch has
+    too few tiles to fill the SMs.
+  example: bmm_batch_in_grid

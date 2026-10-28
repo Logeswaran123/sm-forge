@@ -1,0 +1,25 @@
+examples:
+- id: gemm_num_stages
+  problem: l1_002_standard_matrix_multiplication
+  description: fp16 GEMM, 64x64x32 tiles, num_stages 1 to 3.
+- id: gemm_epilogue_fusion
+  problem: l2_076_gemm_add_relu
+  description: GEMM storing C, then a bias + ReLU kernel, fused into the GEMM epilogue.
+- id: bmm_batch_in_grid
+  problem: l1_003_batched_matrix_multiplication
+  description: 128 launches of a GEMM, one per batch, replaced by one launch with the batch on grid axis 1.
+- id: gemm_fp16_operands
+  problem: l2_076_gemm_add_relu
+  description: Operands upcast to float32 in the wrapper (TF32 dot) replaced by fp16 operands.
+- id: gemm_raster_order
+  problem: l2_076_gemm_add_relu
+  description: 2D grid walking N first changed to walking M first, so concurrent programs share weight tiles.
+- id: gemm_transposed_operand_strides
+  problem: l1_016_matmul_with_transposed_a
+  description: A.t().contiguous() per call replaced by reading A through its strides.
+- id: gemm_sm120_tiles
+  problem: l2_076_gemm_add_relu
+  description: 128x128x64 tiles with 8 warps changed to 64x64x64 with 4 warps.
+- id: gemm_split_k
+  problem: l1_006_matmul_with_large_k_dimension
+  description: 16 programs each looping over K = 524288 replaced by a 64-way split-K and a reduction kernel.
