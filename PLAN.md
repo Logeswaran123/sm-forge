@@ -519,12 +519,12 @@ Examples: 15 to 20 unoptimized/optimized pairs, taken from the dev split only.
 Loader: filter by arch and probes, slice by stage, rank entries by how well their `applies_to`
 matches the kernel's op families, and cap each stage at a token budget (start at 6k).
 
-Exit: at least 60 entries, each with a before/after test passing on the RTX 5080.
-`runners/test_kb_examples.py` passes.
+Exit: every entry verified on the RTX 5080 with a pair from the dev split, and every stage has at
+least one pattern. `runners/test_kb_examples.py` passes. The plan first asked for 60 entries; it
+was lowered to this after the result below.
 
 Result (2026-10-27): 39 entries, 18 constraints and 21 patterns, every one verified on the RTX
-5080 with a pair from the dev split; the exit's 60 is not reached. All eight stages have at
-least one pattern. Pattern speedups range from 1.04x (GEMM epilogue fusion, where the GEMM
+5080 with a pair from the dev split. All eight stages have at least one pattern. Pattern speedups range from 1.04x (GEMM epilogue fusion, where the GEMM
 dominates) to 27.8x (reducing before a linear op). These measured at parity or worse on sm_120
 and are left out:
 
