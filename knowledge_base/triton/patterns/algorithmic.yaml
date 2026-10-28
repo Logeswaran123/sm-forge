@@ -11,3 +11,40 @@ patterns:
     GEMV instead of a GEMM. Only scales, adds and other linear steps may sit between the
     linear op and the reduction. Recompute w_sum on every call from the current weights.
   example: sum_after_linear
+
+- id: causal_block_skipping
+  stage: algorithmic
+  applies_to: [attention]
+  summary: >-
+    With a causal mask, stop each query block's loop over keys at the diagonal instead of
+    visiting every key block and masking it out.
+  how: >-
+    For a query block starting at pid_m * BLOCK_M, keys past (pid_m + 1) * BLOCK_M are all
+    masked: loop `for start_n in range(0, min((pid_m + 1) * BLOCK_M, LK), BLOCK_N)`. Masking
+    still applies inside the last block. This halves the work of causal prefill.
+  example: attention_causal_skip
+
+- id: exp2_with_folded_log2e
+  stage: algorithmic
+  applies_to: [attention, softmax, loss]
+  summary: >-
+    Compute softmax exponentials with tl.exp2 and fold log2(e) into the scale that is
+    already applied, instead of calling tl.exp.
+  how: >-
+    Multiply the score scale by 1.4426950408889634 once on the host (qk_scale = sm_scale *
+    log2e), keep the running max in the same log2 domain, and use tl.exp2 for both alpha and
+    p. tl.exp costs an extra multiply per element before the hardware ex2.
+  example: attention_exp2
+
+- id: implicit_gemm_convolution
+  stage: algorithmic
+  applies_to: [conv2d, conv3d]
+  summary: >-
+    Compute a convolution as a GEMM on tensor cores: rows are output pixels (n, oh, ow),
+    columns are output channels, and the reduction runs over (c, kh, kw).
+  how: >-
+    For each K tile decode offs_k into (c, kh, kw), gather the input tile at
+    x_base[:, None] + c * H * W + kh * W + kw, load the weight tile as [BLOCK_K, BLOCK_N]
+    from the [OC, C*KH*KW] view, and accumulate with tl.dot. Apply bias and activations in
+    the epilogue. A direct convolution with scalar multiply-adds leaves the tensor cores idle.
+  example: conv_implicit_gemm

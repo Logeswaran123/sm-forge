@@ -47,3 +47,17 @@ patterns:
     the variance from x - mean, and writes (x - mean) * rstd * w + b. Separate kernels read
     the row once per statistic and pay a launch each.
   example: layernorm_one_kernel
+
+- id: reduction_in_epilogue
+  stage: fusion
+  applies_to: [conv2d, conv3d, gemm, matmul]
+  summary: >-
+    When a GEMM or convolution is followed by a pooling or sum over its rows, reduce each
+    output tile in the epilogue and write partial sums, instead of storing the full output
+    and reading it back.
+  how: >-
+    Tile rows within one image (grid (n, row_tiles, col_tiles)) so a tile's rows share the
+    reduction target. In the epilogue zero masked rows, take tl.sum(acc, axis=0) and store
+    the partial row to workspace[n, row_tile, :]; a small kernel sums the partials and
+    scales. This removes a write and a read of the full activation.
+  example: conv_pool_epilogue

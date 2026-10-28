@@ -35,3 +35,30 @@ examples:
 - id: mean_dim_wide_tiles
   problem: l1_048_mean_reduction_over_a_dimension
   description: Mean over dim 1 of [64, 4096, 4095] with 256x16 tiles changed to 1024x8.
+- id: attention_causal_skip
+  problem: inf_attention_prefill
+  description: Causal GQA prefill visiting every key block with a mask, changed to stop at the diagonal.
+- id: attention_exp2
+  problem: inf_attention_prefill
+  description: Online softmax with tl.exp on natural-log scores changed to tl.exp2 with log2(e) in the scale.
+- id: conv_implicit_gemm
+  problem: l2_069_conv2d_hardswish_relu
+  description: Direct 3x3 convolution with scalar multiply-adds replaced by an implicit GEMM on tl.dot.
+- id: attention_block_m
+  problem: inf_attention_prefill
+  description: Flash-attention forward with 64x64 tiles and 4 warps changed to 128x64 and 8 warps.
+- id: fp8_native_dot
+  problem: inf_fp8_gemm_tensorwise
+  description: fp8 tiles converted to bf16 before tl.dot replaced by fp8 operands.
+- id: gelu_block_size
+  problem: l1_026_gelu
+  description: Elementwise GELU with 128-element blocks and 4 warps changed to 4096 and 8 warps.
+- id: paged_decode_split_kv
+  problem: inf_paged_attention_decode
+  description: Paged GQA decode with one program per (batch, kv_head) split 16 ways over the pages, then combined.
+- id: conv_pool_epilogue
+  problem: l2_067_conv2d_gelu_globalavgpool
+  description: Implicit-GEMM conv + GELU storing the activation, then a pooling kernel, replaced by per-tile partial sums in the conv epilogue.
+- id: gemm_autotune
+  problem: l1_002_standard_matrix_multiplication
+  description: One hard-coded 128x128x32 config replaced by autotuning over four configs keyed on M, N, K.

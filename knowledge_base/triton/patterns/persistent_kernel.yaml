@@ -11,3 +11,17 @@ patterns:
     tiles * SPLIT covers a few waves of the SMs. A 256x256 output has 16 tiles of 64x64,
     leaving most of 84 SMs idle without the split.
   example: gemm_split_k
+
+- id: split_kv_decode
+  stage: persistent_kernel
+  applies_to: [attention]
+  summary: >-
+    For decode attention with few (batch, kv_head) pairs, split each sequence's keys across
+    programs and merge the partial softmax results in a second kernel (flash-decoding).
+  how: >-
+    Grid (batch, kv_heads, SPLITS); each program covers a range of pages and writes its
+    running max m, sum l and unnormalized acc. A combine kernel per (batch, head) rescales
+    by exp(m_s - max m) and divides by the rescaled sum. Keep the GQA heads of a KV head
+    together in one program so each page is loaded once. With 32 x 8 programs the GPU is
+    underfilled; 16 splits make 4096.
+  example: paged_decode_split_kv

@@ -253,3 +253,21 @@ constraints:
   correct: |
     tl.store(c_ptrs, c, mask=mask_m[:, None] & mask_n[None, :])
   check: {problem: l1_008_matmul_with_irregular_shapes, expect: mismatch}
+
+- id: tma_descriptor_alignment
+  severity: critical
+  stages: [tensor_descriptors]
+  requires: [tma_host]
+  rule: >-
+    A TMA tensor descriptor needs a 16-byte aligned base address and every stride except the
+    last a multiple of 16 bytes. A row-major fp16 [M, K] tensor qualifies only when K is a
+    multiple of 8. Check before building descriptors and fall back to pointer loads.
+  wrong: |
+    # A is fp16 [8205, 2949]: row stride 5898 bytes
+    a_desc = TensorDescriptor.from_tensor(A, [BLOCK_M, BLOCK_K])
+  correct: |
+    if A.stride(0) * A.element_size() % 16 == 0 and A.data_ptr() % 16 == 0:
+        a_desc = TensorDescriptor.from_tensor(A, [BLOCK_M, BLOCK_K])
+    else:
+        ...  # pointer-based kernel
+  check: {problem: l1_008_matmul_with_irregular_shapes, expect: error, match: 16-byte aligned}

@@ -34,3 +34,15 @@ patterns:
     BLOCK_N (1024) gives each warp long contiguous segments to load; a narrow BLOCK_N with
     tall BLOCK_R spreads the same bytes over many short, separately addressed segments.
   example: mean_dim_wide_tiles
+
+- id: elementwise_elements_per_thread
+  stage: memory_access
+  applies_to: [activation, any]
+  summary: >-
+    Give each thread of an elementwise kernel several contiguous elements: BLOCK of at least
+    8 * 32 * num_warps, for example 4096 with 8 warps.
+  how: >-
+    With BLOCK = 128 and 4 warps each thread handles one element, so loads cannot be
+    vectorized and the scheduler handles many more tiny programs. Larger blocks let each
+    thread issue 16-byte loads.
+  example: gelu_block_size

@@ -1,9 +1,73 @@
+attention_block_m:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1767.46
+  after_us: 1429.5
+  speedup: 1.236
+  triton: 3.6.0
+  date: '2026-10-27'
+attention_causal_skip:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3560.45
+  after_us: 1766.43
+  speedup: 2.016
+  triton: 3.6.0
+  date: '2026-10-27'
+attention_exp2:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 2032.61
+  after_us: 1766.3
+  speedup: 1.151
+  triton: 3.6.0
+  date: '2026-10-27'
 bmm_batch_in_grid:
 - gpu: rtx5080
   variant: bench-gpu
   before_us: 3905.34
   after_us: 2332.8
   speedup: 1.674
+  triton: 3.6.0
+  date: '2026-10-27'
+conv_implicit_gemm:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3293.95
+  after_us: 444.38
+  speedup: 7.412
+  triton: 3.6.0
+  date: '2026-10-27'
+conv_pool_epilogue:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 856.13
+  after_us: 524.13
+  speedup: 1.633
+  triton: 3.6.0
+  date: '2026-10-27'
+fp8_native_dot:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1404.93
+  after_us: 611.33
+  speedup: 2.298
+  triton: 3.6.0
+  date: '2026-10-27'
+gelu_block_size:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 2118.82
+  after_us: 1947.97
+  speedup: 1.088
+  triton: 3.6.0
+  date: '2026-10-27'
+gemm_autotune:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1319.97
+  after_us: 1166.56
+  speedup: 1.132
   triton: 3.6.0
   date: '2026-10-27'
 gemm_epilogue_fusion:
@@ -76,6 +140,14 @@ mean_dim_wide_tiles:
   before_us: 3684.16
   after_us: 2437.18
   speedup: 1.512
+  triton: 3.6.0
+  date: '2026-10-27'
+paged_decode_split_kv:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1197.06
+  after_us: 777.02
+  speedup: 1.541
   triton: 3.6.0
   date: '2026-10-27'
 softmax_online_normalizer:

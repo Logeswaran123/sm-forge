@@ -11,3 +11,14 @@ patterns:
     tcgen05, so the large tiles tuned for H100 and B200 lose occupancy without raising MMA
     throughput. Start from BLOCK 64x64x64, num_warps=4, num_stages=3.
   example: gemm_sm120_tiles
+
+- id: attention_query_block_128
+  stage: device_specific
+  applies_to: [attention]
+  summary: >-
+    Use BLOCK_M = 128 queries per program in flash-attention forward, with BLOCK_N = 64 keys
+    and 8 warps (or BLOCK_N = 32 and 4 warps).
+  how: >-
+    Each K and V tile loaded then serves twice as many queries, halving K/V traffic per
+    output. Check the register budget: acc is BLOCK_M x HEAD_D in fp32.
+  example: attention_block_m
