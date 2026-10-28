@@ -13,6 +13,19 @@ class Severity(StrEnum):
     WARNING = "warning"
 
 
+class Stage(StrEnum):
+    """Optimization stages, in the order the planner considers them."""
+
+    ALGORITHMIC = "algorithmic"
+    DTYPE_FIX = "dtype_fix"
+    FUSION = "fusion"
+    MEMORY_ACCESS = "memory_access"
+    TENSOR_DESCRIPTORS = "tensor_descriptors"
+    PERSISTENT_KERNEL = "persistent_kernel"
+    DEVICE_SPECIFIC = "device_specific"
+    AUTOTUNING = "autotuning"
+
+
 class ValidationIssue(BaseModel):
     check: str
     severity: Severity

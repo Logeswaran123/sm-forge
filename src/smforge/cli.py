@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from smforge import render
@@ -27,9 +28,11 @@ from smforge.corpus.results import provenance, upsert
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
+from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
+from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import BudgetExceeded, MissingCredentials, Refused, create_client
-from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline
+from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline, Stage
 from smforge.spec import load_spec
 
 
@@ -97,6 +100,25 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
     seed.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
     seed.set_defaults(func=cmd_seed)
+
+    kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
+    kb_commands = kb.add_subparsers(dest="kb_command", required=True)
+
+    kb_list = kb_commands.add_parser("list", help="entries with their stage and measured speedup")
+    kb_list.set_defaults(func=cmd_kb_list)
+
+    show = kb_commands.add_parser("show", help="a stage's slice as a prompt receives it")
+    show.add_argument("stage", choices=[stage.value for stage in Stage])
+    show.add_argument("--families", help="comma-separated corpus families")
+    show.add_argument("--budget", type=int, default=TOKEN_BUDGET, help="token budget")
+    show.set_defaults(func=cmd_kb_show)
+
+    verify = kb_commands.add_parser("verify", help="run every entry's kernel pair on the GPU")
+    verify.add_argument("--ids", help="comma-separated entry ids")
+    verify.add_argument(
+        "--write", action="store_true", help="record example speedups in measured.yaml"
+    )
+    verify.set_defaults(func=cmd_kb_verify)
     return parser
 
 
@@ -280,6 +302,63 @@ def _probe(runner: Runner, name: str) -> ProbeResult:
         return ProbeResult.model_validate(runner.call("probe", name=name))
     except WorkerError as e:
         return ProbeResult(name=name, compiled=False, error=str(e))
+
+
+def cmd_kb_list(args: argparse.Namespace) -> int:
+    kb = load_kb()
+    for c in kb.constraints:
+        stages = ",".join(c.stages) or "all"
+        print(f"constraint  {c.id:44s} {stages:30s} {c.check.problem}")
+    for p in kb.patterns:
+        example = kb.examples[p.example]
+        speedups = ", ".join(f"{m.speedup:.2f}x {m.gpu}" for m in example.measured) or "-"
+        print(f"pattern     {p.id:44s} {p.stage:30s} {example.problem}  {speedups}")
+    print(f"{len(kb.constraints)} constraints, {len(kb.patterns)} patterns")
+    return 0
+
+
+def cmd_kb_show(args: argparse.Namespace) -> int:
+    config = get_config()
+    kb = load_kb()
+    profile = find_profile(config.hardware_dir, config.device)
+    if profile is not None:
+        kb = kb.for_device(profile)
+    families = args.families.split(",") if args.families else ()
+    print(kb.render(Stage(args.stage), families, args.budget))
+    return 0
+
+
+def cmd_kb_verify(args: argparse.Namespace) -> int:
+    kb = load_kb()
+    wanted = set(args.ids.split(",")) if args.ids else None
+    problems = {p.id: p for p in load_problems()}
+    dev = set(load_splits().get("dev", []))
+    outcomes = []
+
+    def report(outcome: Outcome) -> None:
+        outcomes.append(outcome)
+        status = "PASS" if outcome.passed else "FAIL"
+        print(f"{status} {outcome.kind} {outcome.id}: {outcome.detail}", flush=True)
+
+    with Runner() as runner:
+        device = DeviceInfo.model_validate(runner.call("device"))
+        for constraint in kb.constraints:
+            if wanted is None or constraint.id in wanted:
+                report(verify_constraint(kb, constraint, runner, problems, dev))
+        examples: dict[str, Outcome] = {}
+        for pattern in kb.patterns:
+            if wanted is not None and pattern.id not in wanted:
+                continue
+            example = kb.examples[pattern.example]
+            if example.id not in examples:
+                outcome = verify_example(kb, example, runner, problems, dev, device)
+                if args.write and outcome.passed:
+                    record_measurement(kb, example.id, outcome.measurement)
+                examples[example.id] = outcome
+            report(replace(examples[example.id], id=pattern.id, kind="pattern"))
+    passed = sum(o.passed for o in outcomes)
+    print(f"{passed} of {len(outcomes)} entries verified")
+    return 0 if passed == len(outcomes) else 1
 
 
 if __name__ == "__main__":
