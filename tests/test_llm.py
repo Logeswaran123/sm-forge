@@ -24,6 +24,12 @@ def test_prompt_key_ignores_block_type():
     assert prompt_key("system", sdk) == prompt_key("system", plain)
     assert prompt_key("system", sdk) != prompt_key("system", sdk, role="planner")
     assert prompt_key("system", sdk) != prompt_key("other", sdk)
+    timed = [{"role": "user", "content": "1203.4 us (p20), 885 GB/s, 1.05x; regs 96"}]
+    drifted = [{"role": "user", "content": "1198.9 us (p20), 884 GB/s, 1.01x; regs 96"}]
+    assert prompt_key("system", timed) == prompt_key("system", drifted)
+    assert prompt_key("system", timed) != prompt_key(
+        "system", [{"role": "user", "content": "1203.4 us (p20), 1.05x; regs 128"}]
+    )
 
 
 def test_effort_per_role(monkeypatch):

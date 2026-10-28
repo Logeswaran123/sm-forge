@@ -340,11 +340,11 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             except BudgetExceeded as e:
                 print(f"stopping: {e}", flush=True)
                 break
-            except (MissingCredentials, ClaudeCodeError, ReplayMiss) as e:
+            except (MissingCredentials, ClaudeCodeError) as e:
                 print(e, file=sys.stderr)
                 return 2
-            except Refused as e:
-                print(f"{problem.id}: REFUSED {e}", flush=True)
+            except (Refused, ReplayMiss) as e:
+                print(f"{problem.id}: {type(e).__name__} {e}", flush=True)
                 continue
             except WorkerError as e:
                 print(f"{problem.id}: FAILED to measure the input: {str(e).splitlines()[0]}")

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any, Protocol
@@ -28,6 +29,7 @@ from smforge.config import LLMConfig
 log = logging.getLogger(__name__)
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_MEASURED = re.compile(r"\d+\.\d+(?:e[-+]?\d+)?|\d+(?= ?(?:GB/s|TFLOPS))")
 PRICES = {
     "claude-opus-5-5": (4.00, 20.00, 5.00, 0.20),
     "claude-sonnet-5-5": (2.00, 10.00, 2.50, 0.20),
@@ -196,8 +198,12 @@ def create_client(
 
 
 def prompt_key(system: str, messages: list[dict], role: str | None = None) -> str:
-    """A hash of the prompt's text, the same whether replies carry SDK blocks or plain text."""
-    turns = [{"role": m["role"], "text": _text(m["content"])} for m in messages]
+    """A hash of the prompt's text, the same whether replies carry SDK blocks or plain text.
+
+    Decimal numbers and rates are masked, so a prompt that quotes timings maps to the same key
+    when the measurements differ slightly from the recorded run.
+    """
+    turns = [{"role": m["role"], "text": _MEASURED.sub("#", _text(m["content"]))} for m in messages]
     body = json.dumps({"system": system, "messages": turns, "role": role}, sort_keys=True)
     return hashlib.sha256(body.encode()).hexdigest()[:16]
 
