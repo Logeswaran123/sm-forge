@@ -115,7 +115,10 @@ COMPUTE_METHODS = frozenset(
 _DYNAMIC_CALLS = frozenset({"__import__", "compile", "eval", "exec"})
 _PARAMETER_TYPES = frozenset({"Parameter", "ParameterList", "ParameterDict", "Buffer"})
 
-_VENDOR = re.compile(r"gemm|gemv|cutlass|cublas|cudnn|xmma|cutensor|winograd|fmha|flash", re.I)
+_VENDOR = re.compile(
+    r"gemm|gemv|cutlass|cublas|cudnn|xmma|nvjet|cutensor|winograd|fmha|flash", re.I
+)
+INTERFACE_FUNCTIONS = ("get_inputs", "get_init_inputs")
 _ATEN_DATA = re.compile(r"copy|fill|Fill|CatArray|index|gather|scatter|transpose|contiguous")
 
 
@@ -199,6 +202,22 @@ def _dynamic_code(src: KernelSource) -> list[ValidationIssue]:
     return issues
 
 
+def audit_interface(candidate: str, baseline: str) -> list[ValidationIssue]:
+    """Changes to what the harness calls: ``Model.__init__``'s arguments and the input factories."""
+    new, old = KernelSource(candidate), KernelSource(baseline)
+    issues = []
+    if _arguments(new.methods.get("__init__")) != _arguments(old.methods.get("__init__")):
+        issues.append(
+            _error(
+                "interface_init", "Model.__init__ takes different arguments from the stage input"
+            )
+        )
+    for name in INTERFACE_FUNCTIONS:
+        if _dump(new.functions.get(name)) != _dump(old.functions.get(name)):
+            issues.append(_error("interface_inputs", f"{name} differs from the stage input"))
+    return issues
+
+
 def classify_launch(name: str, triton_names: set[str]) -> LaunchCategory:
     if name in triton_names:
         return LaunchCategory.TRITON
@@ -229,14 +248,16 @@ def audit_launches(
         elif launch.category is LaunchCategory.ATEN_COMPUTE:
             issues.append(_error("aten_compute_launch", f"launches ATen compute kernel {name}"))
         elif launch.category is LaunchCategory.OTHER:
-            issues.append(
-                ValidationIssue(
-                    check="unknown_launch",
-                    severity=Severity.WARNING,
-                    message=f"launches unclassified kernel {name}",
-                )
-            )
+            issues.append(_error("unknown_launch", f"launches unclassified kernel {name}"))
     return issues
+
+
+def _arguments(fn: ast.FunctionDef | None) -> str | None:
+    return ast.dump(fn.args) if fn else None
+
+
+def _dump(fn: ast.FunctionDef | None) -> str | None:
+    return ast.dump(fn) if fn else None
 
 
 def short_name(name: str, limit: int = 100) -> str:

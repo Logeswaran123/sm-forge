@@ -87,7 +87,7 @@ def verifier(problem: Problem, spec: KernelSpec, runner: Runner, workdir: Path) 
             if name in spec.variants:
                 result = runner.check(path, problem.reference, spec=problem.spec, variant=name)
                 if not result.passed:
-                    return False, _check_feedback(name, result)
+                    return False, check_feedback(name, result)
         launches = runner.launches(path, spec=problem.spec, variant="bench-gpu")
         audit = [i for i in audit_launches(launches) if i.severity is Severity.ERROR]
         if audit:
@@ -113,6 +113,7 @@ def seed_problem(
         task_prompt(problem, spec),
         verifier(problem, spec, runner, workdir),
         max_iters,
+        role="seed",
     )
     (workdir / "attempts.json").write_text(
         json.dumps(
@@ -125,7 +126,7 @@ def seed_problem(
     return result
 
 
-def _check_feedback(variant: str, result: CheckResult) -> str:
+def check_feedback(variant: str, result: CheckResult) -> str:
     text = f"Correctness on the `{variant}` variant:\n{render.check(result)}"
     if result.error:
         text += f"\n\nError:\n{result.error.strip()[-ERROR_CHARS:]}"

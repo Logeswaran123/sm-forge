@@ -68,6 +68,16 @@ def test_cover_feeds_failures_back(monkeypatch, tmp_path):
     assert len(list(tmp_path.glob("*.json"))) == 3
 
 
+def test_cover_keeps_recent_attempts(monkeypatch):
+    llm = LLMClient(LLMConfig())
+    requests = scripted(monkeypatch, llm, [f"```python\nv{i}\n```" for i in range(4)])
+    result = cover(llm, "system", "task", lambda code, _: (False, code), max_iters=4, keep=1)
+    assert not result.passed
+    assert [len(r["messages"]) for r in requests] == [1, 3, 3, 3]
+    assert requests[3]["messages"][0]["content"] == "task"
+    assert "v2" in requests[3]["messages"][-1]["content"]
+
+
 def test_budget_and_refusal(monkeypatch):
     llm = LLMClient(LLMConfig(budget_usd=0.0))
     with pytest.raises(BudgetExceeded):

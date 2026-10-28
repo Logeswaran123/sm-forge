@@ -1,7 +1,8 @@
 """CoVeR: generate a candidate, verify it on the GPU, feed the failure back, repeat.
 
-The exchange is one growing conversation: each failed attempt and its verification feedback stay
-in context, and the history is only ever appended to.
+The exchange is one conversation: each failed attempt and its verification feedback stay in
+context. With ``keep`` set, only the task and the last ``keep`` attempts are sent; older attempts
+are dropped from the front.
 """
 
 from __future__ import annotations
@@ -42,12 +43,22 @@ def extract_code(text: str) -> str | None:
     return blocks[-1] if blocks else None
 
 
-def cover(llm: Completer, system: str, task: str, verify: Verifier, max_iters: int) -> CoverResult:
+def cover(
+    llm: Completer,
+    system: str,
+    task: str,
+    verify: Verifier,
+    max_iters: int,
+    role: str | None = None,
+    keep: int | None = None,
+) -> CoverResult:
     """Up to ``max_iters`` attempts; ``verify(code, attempt)`` returns ``(passed, feedback)``."""
     result = CoverResult(code=None)
     messages: list[dict] = [{"role": "user", "content": task}]
     for attempt in range(max_iters):
-        reply = llm.complete(system, messages)
+        if keep is not None and len(messages) > 1 + 2 * keep:
+            messages = [messages[0], *messages[len(messages) - 2 * keep :]]
+        reply = llm.complete(system, messages, role)
         result.usage.add(reply.usage)
         code = extract_code(reply.text)
         passed, feedback = verify(code, attempt) if code is not None else (False, NO_CODE)

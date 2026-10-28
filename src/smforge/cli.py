@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from smforge import render
+from smforge.agents.optimize import PROMPTS, optimize_stage
 from smforge.agents.seed import seed_problem
 from smforge.config import get_config
 from smforge.corpus.build import import_kernelbench
@@ -24,16 +25,24 @@ from smforge.corpus.catalog import (
     save_splits,
 )
 from smforge.corpus.kernelbench import LEVEL1, Untranslatable, problem_id, problem_number
-from smforge.corpus.results import provenance, upsert
+from smforge.corpus.results import STAGE_FIELDS, STAGE_KEY, STAGES, provenance, upsert
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
 from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.llm.claude_code import ClaudeCodeError
-from smforge.llm.client import BudgetExceeded, MissingCredentials, Refused, create_client
+from smforge.llm.client import (
+    BudgetExceeded,
+    MissingCredentials,
+    Refused,
+    ReplayMiss,
+    create_client,
+)
 from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline, Stage
 from smforge.spec import load_spec
+
+STAGE_PROMPTS = {path.stem for path in (PROMPTS / "stages").glob("*.md")}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -100,6 +109,22 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
     seed.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
     seed.set_defaults(func=cmd_seed)
+
+    optimize = commands.add_parser(
+        "optimize", help="run an optimization stage on corpus problems with the LLM (stage 4)"
+    )
+    optimize.add_argument("--stage", required=True, choices=sorted(STAGE_PROMPTS))
+    optimize.add_argument("--ids", help="comma-separated problem ids")
+    optimize.add_argument("--source", help="only problems from this source")
+    optimize.add_argument("--split", choices=("dev", "eval"))
+    optimize.add_argument("--max-iters", type=int, default=3, help="candidates per problem")
+    optimize.add_argument("--keep", type=int, default=2, help="earlier attempts kept in context")
+    optimize.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    optimize.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    optimize.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
+    optimize.add_argument("--record", type=Path, help="append every reply to this JSONL file")
+    optimize.add_argument("--replay", type=Path, help="answer from a recording, without the LLM")
+    optimize.set_defaults(func=cmd_optimize)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
@@ -244,13 +269,7 @@ def _baseline(runner: Runner, problem: Problem, mode: str, args: argparse.Namesp
 
 
 def cmd_seed(args: argparse.Namespace) -> int:
-    config = get_config()
-    if args.budget_usd is not None:
-        config.llm.budget_usd = args.budget_usd
-    if args.backend:
-        config.llm.backend = args.backend
-    if args.claude_bin:
-        config.llm.claude_bin = args.claude_bin
+    config = _llm_config(args)
     problems = _select(load_problems(), args)
     if not args.force:
         problems = [p for p in problems if not p.seed.exists()]
@@ -283,6 +302,88 @@ def cmd_seed(args: argparse.Namespace) -> int:
         f"seeded {seeded} of {len(problems)}; spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
     )
     return 0 if seeded == len(problems) else 1
+
+
+def cmd_optimize(args: argparse.Namespace) -> int:
+    config = _llm_config(args)
+    stage = Stage(args.stage)
+    problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
+    run = time.strftime("%Y%m%d-%H%M%S")
+    llm = create_client(
+        config.llm,
+        transcripts=config.cache_dir / "transcripts" / run,
+        record=args.record,
+        replay=args.replay,
+    )
+    profile = find_profile(config.hardware_dir, config.device)
+    kb = load_kb()
+    if profile is not None:
+        kb = kb.for_device(profile)
+    accepted = 0
+    with Runner(config) as runner:
+        stamp = provenance(runner.call("device"))
+        for problem in problems:
+            workdir = config.cache_dir / "runs" / run / problem.id / stage.value
+            try:
+                result = optimize_stage(
+                    problem,
+                    stage,
+                    problem.seed,
+                    runner,
+                    llm,
+                    kb,
+                    profile,
+                    args.max_iters,
+                    workdir,
+                    args.keep,
+                )
+            except BudgetExceeded as e:
+                print(f"stopping: {e}", flush=True)
+                break
+            except (MissingCredentials, ClaudeCodeError) as e:
+                print(e, file=sys.stderr)
+                return 2
+            except (Refused, ReplayMiss) as e:
+                print(f"{problem.id}: {type(e).__name__} {e}", flush=True)
+                continue
+            except WorkerError as e:
+                print(f"{problem.id}: FAILED to measure the input: {str(e).splitlines()[0]}")
+                continue
+            accepted += result.accepted
+            outcomes = ",".join(a.outcome for a in result.attempts)
+            verdict = f"{result.speedup:.2f}x" if result.accepted else "kept the input"
+            cost = f"${result.usage.cost_usd:.2f}"
+            print(f"{problem.id}: {verdict} [{outcomes}] ({cost})", flush=True)
+            row = {
+                "problem": problem.id,
+                "stage": stage.value,
+                "accepted": int(result.accepted),
+                "input_us": f"{result.input_us:.2f}",
+                "output_us": f"{result.output_us:.2f}",
+                "speedup": f"{result.speedup:.3f}",
+                "attempts": len(result.attempts),
+                "outcomes": outcomes,
+                "cost_usd": f"{result.usage.cost_usd:.4f}",
+                "model": config.llm.model,
+                **stamp,
+            }
+            upsert([row], STAGES, STAGE_FIELDS, STAGE_KEY)
+    print(
+        f"accepted {accepted} of {len(problems)}; "
+        f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
+    )
+    return 0
+
+
+def _llm_config(args: argparse.Namespace):
+    config = get_config()
+    if args.budget_usd is not None:
+        config.llm.budget_usd = args.budget_usd
+    if args.backend:
+        config.llm.backend = args.backend
+    if args.claude_bin:
+        config.llm.claude_bin = args.claude_bin
+    return config
 
 
 def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:

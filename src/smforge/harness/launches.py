@@ -1,5 +1,8 @@
 """The CUDA kernels one forward launches, from the PyTorch profiler (worker side).
 
+A kernel counts as Triton when the module defines it or when Triton's runtime launched it during
+the warm-up call, which also catches kernels defined inside functions.
+
 On WSL2 the profiler stops recording CUDA activity about 40 s after a process first uses it, and
 does not recover. An empty profile therefore raises ``ProfilerUnavailable``, which ends the
 worker, instead of reading as a forward that launched nothing.
@@ -18,6 +21,7 @@ from torch.profiler import ProfilerActivity, profile
 from triton.runtime.jit import JITFunction
 
 from smforge.harness.audit import classify_launch
+from smforge.harness.facts import capture_launches
 from smforge.models import Launch, LaunchProfile
 
 
@@ -39,8 +43,10 @@ def triton_names(module: ModuleType) -> set[str]:
 
 
 def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -> LaunchProfile:
-    fn()
-    torch.cuda.synchronize()
+    with capture_launches() as records:
+        fn()
+        torch.cuda.synchronize()
+    names = names | {kernel.name for kernel, _ in records}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with profile(activities=[ProfilerActivity.CUDA]) as prof:

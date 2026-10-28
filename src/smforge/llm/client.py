@@ -1,15 +1,22 @@
-"""The Anthropic client: model, effort, caching, refusals, usage, cost and transcripts.
+"""The Anthropic client: model, effort, caching, refusals, usage, cost, transcripts and replay.
 
 The system prompt carries an explicit cache breakpoint and the request enables automatic
-caching, so a multi-turn exchange re-reads its history from the cache. A classifier decline is
-retried server-side on the model Anthropic recommends for that category (``fallbacks:
-"default"``); a decline that survives that raises ``Refused``.
+caching, so a multi-turn exchange re-reads its history from the cache; a later turn that reads
+nothing from the cache is logged. A classifier decline is retried server-side on the model
+Anthropic recommends for that category (``fallbacks: "default"``); a decline that survives that
+raises ``Refused``.
+
+``Recorder`` appends every reply to a JSONL file keyed by a hash of the prompt, and
+``ReplayClient`` answers from such a file without network access, so tests and reruns of a stage
+need no API calls.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import re
 import time
 from pathlib import Path
 from typing import Any, Protocol
@@ -19,7 +26,10 @@ from pydantic import BaseModel
 
 from smforge.config import LLMConfig
 
+log = logging.getLogger(__name__)
+
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_MEASURED = re.compile(r"\d+\.\d+(?:e[-+]?\d+)?|\d+(?= ?(?:GB/s|TFLOPS))")
 PRICES = {
     "claude-opus-5-5": (4.00, 20.00, 5.00, 0.20),
     "claude-sonnet-5-5": (2.00, 10.00, 2.50, 0.20),
@@ -53,7 +63,7 @@ class Completer(Protocol):
     config: LLMConfig
     usage: Usage
 
-    def complete(self, system: str, messages: list[dict]) -> Reply: ...
+    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply: ...
 
 
 class Refused(RuntimeError):
@@ -68,6 +78,10 @@ class MissingCredentials(RuntimeError):
     pass
 
 
+class ReplayMiss(KeyError):
+    pass
+
+
 class LLMClient:
     def __init__(self, config: LLMConfig, transcripts: Path | None = None):
         self.config = config
@@ -75,7 +89,7 @@ class LLMClient:
         self.usage = Usage()
         self._client: anthropic.Anthropic | None = None
 
-    def complete(self, system: str, messages: list[dict]) -> Reply:
+    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
         check_budget(self.config, self.usage)
         request = {
             "model": self.config.model,
@@ -83,7 +97,7 @@ class LLMClient:
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "messages": messages,
             "cache_control": {"type": "ephemeral"},
-            "output_config": {"effort": self.config.effort},
+            "output_config": {"effort": self.config.effort_for(role)},
             "betas": [FALLBACK_BETA],
             "fallbacks": "default",
         }
@@ -97,13 +111,15 @@ class LLMClient:
         )
         self.usage.add(reply.usage)
         record_transcript(self.transcripts, request, reply)
+        if len(messages) > 1 and reply.usage.cache_read_tokens == 0:
+            log.warning("turn %d read nothing from the prompt cache", len(messages) // 2 + 1)
         if reply.stop_reason == "refusal":
             raise Refused(f"{message.model} declined: {message.stop_details}")
         return reply
 
     def _send(self, request: dict) -> Any:
         if self._client is None:
-            self._client = anthropic.Anthropic()
+            self._client = anthropic.Anthropic(max_retries=self.config.max_retries)
         try:
             with self._client.beta.messages.stream(**request) as stream:
                 return stream.get_final_message()
@@ -117,14 +133,99 @@ class LLMClient:
             ) from e
 
 
-def create_client(config: LLMConfig, transcripts: Path | None = None) -> Completer:
+class Recorder:
+    """Passes calls to ``client`` and appends each reply to ``path`` under its prompt key."""
+
+    def __init__(self, client: Completer, path: Path):
+        self.client = client
+        self.path = path
+        self.config = client.config
+        self.usage = client.usage
+
+    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
+        reply = self.client.complete(system, messages, role)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        record = {"key": prompt_key(system, messages, role), **_recorded(reply)}
+        with self.path.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+        return reply
+
+
+class ReplayClient:
+    """Answers from a recording; a prompt it has not seen raises ``ReplayMiss``."""
+
+    def __init__(self, config: LLMConfig, path: Path):
+        self.config = config
+        self.usage = Usage()
+        self.replies = {}
+        for line in path.read_text().splitlines():
+            record = json.loads(line)
+            self.replies[record.pop("key")] = record
+
+    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
+        key = prompt_key(system, messages, role)
+        if key not in self.replies:
+            raise ReplayMiss(f"no recorded reply for prompt {key}")
+        record = self.replies[key]
+        reply = Reply(
+            text=record["text"],
+            content=[{"type": "text", "text": record["text"]}],
+            model=record["model"],
+            stop_reason=record["stop_reason"],
+            usage=Usage(**record["usage"]),
+        )
+        self.usage.add(reply.usage)
+        return reply
+
+
+def create_client(
+    config: LLMConfig,
+    transcripts: Path | None = None,
+    record: Path | None = None,
+    replay: Path | None = None,
+) -> Completer:
+    if replay is not None:
+        return ReplayClient(config, replay)
     if config.backend == "claude-code":
         from smforge.llm.claude_code import ClaudeCodeClient
 
-        return ClaudeCodeClient(config, transcripts)
-    if config.backend != "api":
+        client: Completer = ClaudeCodeClient(config, transcripts)
+    elif config.backend == "api":
+        client = LLMClient(config, transcripts)
+    else:
         raise ValueError(f"unknown LLM backend {config.backend!r}; expected api or claude-code")
-    return LLMClient(config, transcripts)
+    return Recorder(client, record) if record is not None else client
+
+
+def prompt_key(system: str, messages: list[dict], role: str | None = None) -> str:
+    """A hash of the prompt's text, the same whether replies carry SDK blocks or plain text.
+
+    Decimal numbers and rates are masked, so a prompt that quotes timings maps to the same key
+    when the measurements differ slightly from the recorded run.
+    """
+    turns = [{"role": m["role"], "text": _MEASURED.sub("#", _text(m["content"]))} for m in messages]
+    body = json.dumps({"system": system, "messages": turns, "role": role}, sort_keys=True)
+    return hashlib.sha256(body.encode()).hexdigest()[:16]
+
+
+def _text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content:
+        text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
+        if text is not None:
+            parts.append(text)
+    return "".join(parts)
+
+
+def _recorded(reply: Reply) -> dict:
+    return {
+        "text": reply.text,
+        "model": reply.model,
+        "stop_reason": reply.stop_reason,
+        "usage": reply.usage.model_dump(),
+    }
 
 
 def check_budget(config: LLMConfig, usage: Usage) -> None:
