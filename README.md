@@ -75,6 +75,25 @@ smforge corpus baselines --modes eager,compile,seed    # writes results/baseline
 python scripts/roofline.py                 # plots/roofline.png
 ```
 
+## Optimization
+
+`smforge optimize` runs one optimization stage on corpus problems, starting from each problem's
+seed. The LLM gets the stage's instructions, the knowledge base slice for the problem's family,
+the reference, and the current kernel with its timing and per-kernel facts. Each candidate goes
+through the static checks, an interface check (`Model.__init__`, `get_inputs`,
+`get_init_inputs` unchanged), correctness on `ci` and `bench-gpu`, the launch audit, and an
+interleaved A/B against the current kernel. It is kept only if it is faster by more than the
+min-effect band; otherwise the input carries forward.
+
+```bash
+smforge optimize --stage autotuning --split dev --max-iters 3 --budget-usd 20
+smforge optimize --stage autotuning --ids l1_002_standard_matrix_multiplication --record r.jsonl
+smforge optimize --stage autotuning --ids l1_002_standard_matrix_multiplication --replay r.jsonl
+```
+
+Results go to `results/stages.csv`; candidates, their outcomes and the stage output to
+`.smforge/runs/<run>/<problem>/<stage>/`.
+
 ## Knowledge base
 
 `knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.

@@ -1,4 +1,5 @@
-"""Baseline and seed timings: ``results/baselines.csv``, one row per problem, variant and mode."""
+"""Result tables: ``results/baselines.csv``, one row per problem, variant and mode, and
+``results/stages.csv``, one row per problem and optimization stage."""
 
 from __future__ import annotations
 
@@ -24,6 +25,24 @@ FIELDS = (
     "date",
 )
 KEY = ("problem", "variant", "mode")
+STAGES = Path("results") / "stages.csv"
+STAGE_FIELDS = (
+    "problem",
+    "stage",
+    "accepted",
+    "input_us",
+    "output_us",
+    "speedup",
+    "attempts",
+    "outcomes",
+    "cost_usd",
+    "model",
+    "gpu",
+    "triton",
+    "commit",
+    "date",
+)
+STAGE_KEY = ("problem", "stage")
 
 
 def load_results(path: Path = RESULTS) -> list[dict[str, str]]:
@@ -33,14 +52,19 @@ def load_results(path: Path = RESULTS) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-def upsert(rows: list[dict], path: Path = RESULTS) -> None:
-    """Replace rows with the same problem, variant and mode; keep the rest."""
-    merged = {tuple(row[k] for k in KEY): row for row in load_results(path)}
+def upsert(
+    rows: list[dict],
+    path: Path = RESULTS,
+    fields: tuple[str, ...] = FIELDS,
+    key: tuple[str, ...] = KEY,
+) -> None:
+    """Replace rows with the same key; keep the rest."""
+    merged = {tuple(row[k] for k in key): row for row in load_results(path)}
     for row in rows:
-        merged[tuple(str(row[k]) for k in KEY)] = {f: row.get(f, "") for f in FIELDS}
+        merged[tuple(str(row[k]) for k in key)] = {f: row.get(f, "") for f in fields}
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(merged[key] for key in sorted(merged))
 

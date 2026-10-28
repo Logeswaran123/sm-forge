@@ -113,6 +113,37 @@ def facts(report: FactsReport, ridge: float | None = None) -> str:
     return "\n".join(lines)
 
 
+def fact_deltas(before: FactsReport, after: FactsReport) -> str:
+    """Per kernel, the resources and launch shape that changed from ``before`` to ``after``."""
+    old = {k.name: k for k in before.kernels}
+    new = {k.name: k for k in after.kernels}
+    lines = []
+    for name, kernel in new.items():
+        if name not in old:
+            lines.append(
+                f"{name}: new; regs {kernel.n_regs}, spills {kernel.n_spills}, "
+                f"{kernel.num_warps} warps, {kernel.ctas} CTAs"
+            )
+            continue
+        was = old[name]
+        changes = [
+            f"{label} {a} -> {b}"
+            for label, a, b in (
+                ("regs", was.n_regs, kernel.n_regs),
+                ("spills", was.n_spills, kernel.n_spills),
+                ("smem KB", was.shared_bytes // 1024, kernel.shared_bytes // 1024),
+                ("warps", was.num_warps, kernel.num_warps),
+                ("stages", was.num_stages, kernel.num_stages),
+                ("CTAs", was.ctas, kernel.ctas),
+                ("CTAs/SM", was.ctas_per_sm, kernel.ctas_per_sm),
+            )
+            if a != b
+        ]
+        lines.append(f"{name}: {', '.join(changes) or 'unchanged'}")
+    lines += [f"{name}: removed" for name in old if name not in new]
+    return "\n".join(lines)
+
+
 def device(profile: DeviceProfile) -> str:
     d = profile.device
     wsl = ", WSL2" if d.wsl else ""
