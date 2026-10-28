@@ -118,16 +118,13 @@ noise:
 tools:
 - name: ncu
   path: /usr/local/cuda-12.8/bin/ncu
-  ok: false
-  detail: ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU
-    Performance Counters on the target device 0. For instructions on enabling permissions
-    and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+  ok: true
+  detail: ''
 - name: nsys
   path: /usr/local/cuda-12.8/bin/nsys
   ok: true
   detail: ''
 - name: compute-sanitizer
   path: /usr/local/cuda-12.8/bin/compute-sanitizer
-  ok: false
-  detail: 'Error: Failed to initialize WDDM debugger interface. Please run EnableDebuggerInterface.bat
-    as an administrator'
+  ok: true
+  detail: ''
