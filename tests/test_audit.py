@@ -98,6 +98,7 @@ def test_allow_list():
             LaunchCategory.VENDOR,
         ),
         ("sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize", LaunchCategory.VENDOR),
+        ("nvjet_tst_128x64_64x6_1x1_v_bz_coopA_TNT", LaunchCategory.VENDOR),
         (
             "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<c10::Half>>",
             LaunchCategory.ATEN_COMPUTE,
@@ -132,6 +133,9 @@ def test_audit_launches():
     assert checks(audit_launches(profile(gemm))) == ["no_triton_launch", "vendor_launch"]
     assert checks(audit_launches(profile(triton, gemm, reduce), profile(gemm))) == [
         "aten_compute_launch"
+    ]
+    assert checks(audit_launches(profile(triton, ("helper", LaunchCategory.OTHER)))) == [
+        "unknown_launch"
     ]
 
 
