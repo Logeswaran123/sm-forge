@@ -12,6 +12,8 @@ from typing import Any
 import numpy as np
 import torch
 from torch import nn
+from triton.runtime.autotuner import Autotuner
+from triton.runtime.errors import OutOfResources
 
 from smforge.harness.launches import triton_names
 from smforge.harness.workload import Workload, clone, load_module
@@ -152,12 +154,14 @@ def check_kernel(
     """Run oracle and candidate on ``draws`` input draws in one process.
 
     The candidate model is built once, so a module that caches its first output fails the
-    second draw.
+    second draw. After the draws pass, every config of each autotuned kernel is forced in turn
+    and checked on the first draw: the autotuner may pick a different one on another run.
     """
     oracle_module = load_module(oracle)
     upcast = oracle_dtype(workload, oracle_module)
     reference = workload.build(oracle_module, upcast)
-    model = workload.build(load_module(candidate))
+    candidate_module = load_module(candidate)
+    model = workload.build(candidate_module)
     weights = copy_weights(reference, model)
     digest = hashlib.sha256(oracle.read_bytes())
     digest.update(workload.key().encode())
@@ -170,17 +174,62 @@ def check_kernel(
         oracle_dtype=str(upcast).removeprefix("torch.") if upcast else None,
     )
     diffs: list[OutputDiff] = []
+    first = None
     for draw in range(draws):
         inputs = workload.inputs(draw)
         expected = cache.get(
             f"{digest.hexdigest()[:24]}-{draw}", partial(_run, reference, inputs, upcast)
         )
+        first = first or (inputs, expected)
         actual = _run(model, inputs)
         torch.cuda.synchronize()
         diffs, error = compare_outputs(expected, actual, rtol, atol)
         if error or any(d.mismatched for d in diffs):
             return result(passed=False, draws=draw + 1, diffs=diffs, error=error)
+    for name, tuner in autotuners(candidate_module).items():
+        failure = _check_configs(name, tuner, model, *first, rtol, atol)
+        if failure is not None:
+            return result(passed=False, draws=draws, diffs=failure[0], error=failure[1])
     return result(passed=True, draws=draws, diffs=diffs)
+
+
+def autotuners(module: ModuleType) -> dict[str, Autotuner]:
+    """The module's autotuned kernels, through other decorators such as heuristics."""
+    found = {}
+    for name, value in vars(module).items():
+        for _ in range(4):
+            if isinstance(value, Autotuner):
+                found[name] = value
+                break
+            value = getattr(value, "fn", None)
+            if value is None:
+                break
+    return found
+
+
+def _check_configs(
+    name: str, tuner: Autotuner, model: nn.Module, inputs: list, expected: Any, rtol, atol
+) -> tuple[list[OutputDiff], str] | None:
+    """The first config whose output differs, skipping configs the device cannot run."""
+    configs = list(tuner.configs)
+    if len(configs) < 2:
+        return None
+    try:
+        for config in configs:
+            tuner.configs = [config]
+            try:
+                actual = _run(model, inputs)
+                torch.cuda.synchronize()
+            except OutOfResources:
+                continue
+            diffs, error = compare_outputs(expected, actual, rtol, atol)
+            if error or any(d.mismatched for d in diffs):
+                return diffs, f"autotune config of {name} gives wrong output: {config}" + (
+                    f"; {error}" if error else ""
+                )
+    finally:
+        tuner.configs = configs
+    return None
 
 
 def _run(model: nn.Module, inputs: list, upcast: torch.dtype | None = None) -> Any:
