@@ -271,3 +271,34 @@ constraints:
     else:
         ...  # pointer-based kernel
   check: {problem: l1_008_matmul_with_irregular_shapes, expect: error, match: 16-byte aligned}
+
+- id: no_low_precision_accumulate
+  severity: critical
+  stages: []
+  rule: >-
+    Do not accumulate tl.dot in fp16 or bf16 (out_dtype=tl.float16), not even per K tile.
+    Consumer GPUs run fp16-accumulate MMA at twice the fp32-accumulate rate, but partial sums
+    lose precision and can overflow on real activations. The static check rejects it.
+  wrong: |
+    part = tl.dot(a, b, out_dtype=tl.float16)
+    acc += part.to(tl.float32)
+  correct: |
+    acc = tl.dot(a, b, acc)  # acc is float32
+  check: {problem: l2_076_gemm_add_relu, expect: static, match: low_precision_accumulate}
+
+- id: no_spin_wait_between_programs
+  severity: critical
+  stages: []
+  rule: >-
+    Programs must not wait for each other inside a kernel: no while loop polling an atomic or
+    a volatile load. Triton gives no guarantee that the programs being waited on are resident,
+    so the wait can deadlock. Combine partial results in a second kernel launch instead. The
+    static check rejects such loops.
+  wrong: |
+    cnt = tl.atomic_add(cnt_ptr + row, 1, sem="acq_rel")
+    while cnt < G:
+        cnt = tl.atomic_add(cnt_ptr + row, 0, sem="acquire")
+  correct: |
+    partial_kernel[grid](x, partials, ...)
+    combine_kernel[(rows,)](partials, y, ...)
+  check: {problem: inf_softmax_vocab, expect: static, match: spin_wait}

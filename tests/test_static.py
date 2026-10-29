@@ -82,3 +82,23 @@ def test_host_sync_in_forward_path():
     issues = validate_source(code)
     assert checks(issues) == ["host_sync", "host_sync"]
     assert all(issue.severity == "warning" for issue in issues)
+
+
+def test_low_precision_accumulate():
+    dot = "tl.dot(tl.load(a), tl.load(b), acc)"
+    assert dot in GOOD
+    code = GOOD.replace(dot, "acc + tl.dot(tl.load(a), tl.load(b), out_dtype=tl.float16)")
+    assert checks(validate_source(code)) == ["low_precision_accumulate"]
+    fp32 = GOOD.replace(dot, "tl.dot(tl.load(a), tl.load(b), acc, out_dtype=tl.float32)")
+    assert validate_source(fp32) == []
+
+
+def test_spin_wait():
+    code = GOOD.replace(
+        "    acc = tl.zeros(",
+        "    flag = tl.atomic_add(cnt_ptr, 1)\n"
+        "    while flag < 4:\n"
+        "        flag = tl.atomic_add(cnt_ptr, 0)\n"
+        "    acc = tl.zeros(",
+    )
+    assert checks(validate_source(code)) == ["spin_wait"]
