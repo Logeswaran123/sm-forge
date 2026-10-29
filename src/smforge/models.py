@@ -23,7 +23,40 @@ class Stage(StrEnum):
     TENSOR_DESCRIPTORS = "tensor_descriptors"
     PERSISTENT_KERNEL = "persistent_kernel"
     DEVICE_SPECIFIC = "device_specific"
+    OPEN_ENDED = "open_ended"
     AUTOTUNING = "autotuning"
+
+
+class IssueType(StrEnum):
+    """What can be wrong with a kernel. The first group is detected from facts, ncu counters or
+    the source; the second is judged by the analyzer."""
+
+    REGISTER_SPILL = "register_spill"
+    NO_TENSOR_CORE_MMA = "no_tensor_core_mma"
+    TF32_PRECISION_RISK = "tf32_precision_risk"
+    LOW_OCCUPANCY = "low_occupancy"
+    SMEM_OVER_BUDGET = "smem_over_budget"
+    MISSING_PIPELINING = "missing_pipelining"
+    GRID_UNDERFILL = "grid_underfill"
+    TAIL_WAVE = "tail_wave"
+    LAUNCH_BOUND = "launch_bound"
+    UNCOALESCED_ACCESS = "uncoalesced_access"
+    BANK_CONFLICT = "bank_conflict"
+    HOST_SYNC_IN_FORWARD = "host_sync_in_forward"
+    UNTUNED_CONFIG = "untuned_config"
+    ALGEBRAIC_SIMPLIFICATION = "algebraic_simplification"
+    UNFUSED_OPS = "unfused_ops"
+    UPCAST_OPERANDS = "upcast_operands"
+    PER_CALL_WEIGHT_PREP = "per_call_weight_prep"
+    SPLIT_K_OPPORTUNITY = "split_k_opportunity"
+    OPEN_ENDED = "open_ended"
+
+
+class Issue(BaseModel):
+    type: IssueType
+    evidence: str
+    kernel: str | None = None
+    source: str = "llm"
 
 
 class ValidationIssue(BaseModel):
@@ -121,6 +154,19 @@ class KernelFacts(BaseModel):
     mma: dict[str, int] = Field(default_factory=dict)
     instructions: dict[str, int] = Field(default_factory=dict)
     total_instructions: int = 0
+
+
+class NcuKernel(BaseModel):
+    """Nsight Compute counters for one kernel, averaged over its launches in one forward."""
+
+    name: str
+    launches: int
+    duration_us: float
+    sm_pct: float
+    dram_pct: float
+    load_bytes_per_sector: float | None = None
+    store_bytes_per_sector: float | None = None
+    shared_conflicts_per_wavefront: float | None = None
 
 
 class FactsReport(BaseModel):
