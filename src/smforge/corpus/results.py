@@ -1,5 +1,6 @@
-"""Result tables: ``results/baselines.csv``, one row per problem, variant and mode, and
-``results/stages.csv``, one row per problem and optimization stage."""
+"""Result tables: ``results/baselines.csv``, one row per problem, variant and mode;
+``results/stages.csv``, one row per problem for a stage run on its own; and
+``results/pipeline.csv`` with ``results/pipeline_stages.csv`` for full pipeline runs."""
 
 from __future__ import annotations
 
@@ -43,6 +44,24 @@ STAGE_FIELDS = (
     "date",
 )
 STAGE_KEY = ("problem", "stage")
+PIPELINE = Path("results") / "pipeline.csv"
+PIPELINE_STAGES = Path("results") / "pipeline_stages.csv"
+PIPELINE_FIELDS = (
+    "problem",
+    "seed_us",
+    "final_us",
+    "speedup",
+    "plan",
+    "accepted",
+    "issues",
+    "cost_usd",
+    "model",
+    "gpu",
+    "triton",
+    "commit",
+    "date",
+)
+PIPELINE_KEY = ("problem",)
 
 
 def load_results(path: Path = RESULTS) -> list[dict[str, str]]:

@@ -15,6 +15,7 @@ from pathlib import Path
 from string import Template
 
 from smforge import render
+from smforge.agents.analyze import Measurements, measurements_text
 from smforge.agents.cover import NO_CODE, cover
 from smforge.agents.seed import CHECK_VARIANTS, check_feedback, task_prompt
 from smforge.corpus.catalog import Problem
@@ -88,29 +89,30 @@ def optimize_stage(
     max_iters: int,
     workdir: Path,
     keep: int | None = 2,
+    notes: str | None = None,
+    measured: Measurements | None = None,
 ) -> StageResult:
+    """Run one stage from ``kernel``; ``measured`` reuses measurements of it already taken."""
     spec = load_spec(problem.spec)
     workdir.mkdir(parents=True, exist_ok=True)
     baseline = kernel.read_text()
-    timing = runner.bench(kernel, spec=problem.spec, variant=TIMED_VARIANT)
-    facts = runner.facts(kernel, spec=problem.spec, variant=TIMED_VARIANT)
-    launches = runner.launches(kernel, spec=problem.spec, variant=TIMED_VARIANT)
-    ridge = None
-    if profile and profile.roofline:
-        ridge = profile.roofline.ridge(spec.dtype(spec.variant(TIMED_VARIANT)))
-    task = "\n".join(
-        [
-            task_prompt(problem, spec),
-            "",
-            "Current kernel (`kernel.py`):",
-            "",
-            f"```python\n{baseline.strip()}\n```",
-            "",
-            f"Measured on `{TIMED_VARIANT}`: {render.timing(timing)}",
-            "",
-            render.facts(facts, ridge),
-        ]
-    )
+    if measured is None:
+        args = {"spec": problem.spec, "variant": TIMED_VARIANT}
+        measured = Measurements(
+            runner.bench(kernel, **args),
+            runner.facts(kernel, **args),
+            runner.launches(kernel, **args),
+            None,
+        )
+    timing, facts, launches = measured.timing, measured.facts, measured.launches
+    sections = [
+        task_prompt(problem, spec),
+        f"Current kernel (`kernel.py`):\n\n```python\n{baseline.strip()}\n```",
+        measurements_text(measured, spec.dtype(spec.variant(TIMED_VARIANT)), profile),
+    ]
+    if notes:
+        sections.append(notes)
+    task = "\n\n".join(sections)
     min_effect = runner.config.timing.min_effect
     system = system_prompt(stage, profile, kb.render(stage, [problem.family]), min_effect)
     result = StageResult(problem.id, stage, False, kernel, timing.time_us, timing.time_us)

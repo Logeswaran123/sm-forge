@@ -13,6 +13,7 @@ from pathlib import Path
 
 from smforge import render
 from smforge.agents.optimize import PROMPTS, optimize_stage
+from smforge.agents.pipeline import run_pipeline
 from smforge.agents.seed import seed_problem
 from smforge.config import get_config
 from smforge.corpus.build import import_kernelbench
@@ -25,7 +26,17 @@ from smforge.corpus.catalog import (
     save_splits,
 )
 from smforge.corpus.kernelbench import LEVEL1, Untranslatable, problem_id, problem_number
-from smforge.corpus.results import STAGE_FIELDS, STAGE_KEY, STAGES, provenance, upsert
+from smforge.corpus.results import (
+    PIPELINE,
+    PIPELINE_FIELDS,
+    PIPELINE_KEY,
+    PIPELINE_STAGES,
+    STAGE_FIELDS,
+    STAGE_KEY,
+    STAGES,
+    provenance,
+    upsert,
+)
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
 from smforge.device.tools import check_tools
 from smforge.harness.runner import Runner, WorkerError
@@ -125,6 +136,21 @@ def build_parser() -> argparse.ArgumentParser:
     optimize.add_argument("--record", type=Path, help="append every reply to this JSONL file")
     optimize.add_argument("--replay", type=Path, help="answer from a recording, without the LLM")
     optimize.set_defaults(func=cmd_optimize)
+
+    pipeline = commands.add_parser(
+        "pipeline", help="analyze, plan and run every stage on corpus problems (stage 5)"
+    )
+    pipeline.add_argument("--ids", help="comma-separated problem ids")
+    pipeline.add_argument("--source", help="only problems from this source")
+    pipeline.add_argument("--split", choices=("dev", "eval"))
+    pipeline.add_argument("--max-iters", type=int, default=3, help="candidates per stage")
+    pipeline.add_argument("--keep", type=int, default=2, help="earlier attempts kept in context")
+    pipeline.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    pipeline.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    pipeline.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
+    pipeline.add_argument("--record", type=Path, help="append every reply to this JSONL file")
+    pipeline.add_argument("--replay", type=Path, help="answer from a recording, without the LLM")
+    pipeline.set_defaults(func=cmd_pipeline)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
@@ -370,6 +396,98 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             upsert([row], STAGES, STAGE_FIELDS, STAGE_KEY)
     print(
         f"accepted {accepted} of {len(problems)}; "
+        f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
+    )
+    return 0
+
+
+def cmd_pipeline(args: argparse.Namespace) -> int:
+    config = _llm_config(args)
+    problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
+    run = time.strftime("%Y%m%d-%H%M%S")
+    llm = create_client(
+        config.llm,
+        transcripts=config.cache_dir / "transcripts" / run,
+        record=args.record,
+        replay=args.replay,
+    )
+    profile = find_profile(config.hardware_dir, config.device)
+    kb = load_kb()
+    if profile is not None:
+        kb = kb.for_device(profile)
+    improved = 0
+    with Runner(config) as runner:
+        stamp = provenance(runner.call("device"))
+        for problem in problems:
+            workdir = config.cache_dir / "runs" / run / problem.id / "pipeline"
+            try:
+                result = run_pipeline(
+                    problem, runner, llm, kb, profile, args.max_iters, workdir, args.keep
+                )
+            except BudgetExceeded as e:
+                print(f"stopping: {e}", flush=True)
+                break
+            except (MissingCredentials, ClaudeCodeError) as e:
+                print(e, file=sys.stderr)
+                return 2
+            except (Refused, ReplayMiss) as e:
+                print(f"{problem.id}: {type(e).__name__} {e}", flush=True)
+                continue
+            except WorkerError as e:
+                print(f"{problem.id}: FAILED: {str(e).splitlines()[0]}", flush=True)
+                continue
+            improved += result.kernel != problem.seed
+            accepted = [str(s.stage) for s in result.stages if s.accepted]
+            stages = (
+                " ".join(f"{s.stage}{'+' if s.accepted else '-'}" for s in result.stages)
+                or "no stages"
+            )
+            print(
+                f"{problem.id}: {result.speedup:.2f}x [{stages}] (${result.usage.cost_usd:.2f})",
+                flush=True,
+            )
+            upsert(
+                [
+                    {
+                        "problem": problem.id,
+                        "seed_us": f"{result.seed_us:.2f}",
+                        "final_us": f"{result.final_us:.2f}",
+                        "speedup": f"{result.speedup:.3f}",
+                        "plan": ",".join(map(str, result.plan)),
+                        "accepted": ",".join(accepted),
+                        "issues": ",".join(sorted({str(i.type) for i in result.issues})),
+                        "cost_usd": f"{result.usage.cost_usd:.4f}",
+                        "model": config.llm.model,
+                        **stamp,
+                    }
+                ],
+                PIPELINE,
+                PIPELINE_FIELDS,
+                PIPELINE_KEY,
+            )
+            upsert(
+                [
+                    {
+                        "problem": problem.id,
+                        "stage": str(s.stage),
+                        "accepted": int(s.accepted),
+                        "input_us": f"{s.input_us:.2f}",
+                        "output_us": f"{s.output_us:.2f}",
+                        "speedup": f"{s.speedup:.3f}",
+                        "attempts": len(s.attempts),
+                        "outcomes": ",".join(a.outcome for a in s.attempts),
+                        "cost_usd": f"{s.usage.cost_usd:.4f}",
+                        "model": config.llm.model,
+                        **stamp,
+                    }
+                    for s in result.stages
+                ],
+                PIPELINE_STAGES,
+                STAGE_FIELDS,
+                STAGE_KEY,
+            )
+    print(
+        f"improved {improved} of {len(problems)}; "
         f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
     )
     return 0
