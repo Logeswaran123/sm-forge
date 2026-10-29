@@ -94,6 +94,19 @@ smforge optimize --stage autotuning --ids l1_002_standard_matrix_multiplication 
 Results go to `results/stages.csv`; candidates, their outcomes and the stage output to
 `.smforge/runs/<run>/<problem>/<stage>/`.
 
+`smforge pipeline` runs the whole optimization on a problem. It measures the seed (timing, SASS
+facts, launches, Nsight Compute counters), turns the measurements into fact-backed issues, asks
+the analyzer for the issues the numbers cannot show, and plans the stages those issues route to.
+Each stage gets its issues; after an accepted stage the kernel is measured again. The final
+kernel is kept only if it beats the seed.
+
+```bash
+smforge pipeline --split dev --max-iters 3 --budget-usd 100
+```
+
+Results go to `results/pipeline.csv` (one row per problem) and `results/pipeline_stages.csv`
+(one row per problem and stage).
+
 ## Knowledge base
 
 `knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.

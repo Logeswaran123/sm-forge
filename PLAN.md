@@ -644,6 +644,22 @@ where the autotuner picks its config anew. Per-problem rows are in `results/stag
 Exit: the full pipeline runs over the dev split, and no regression is finalized. The run report
 has accept rates and cost per stage.
 
+Built in v0.5.0, with these differences from the list above:
+
+- Issue types: `missing_tma` and `fp8_opportunity` are left out (TMA measured at parity on sm_120,
+  and no fp16 problem's tolerance admits fp8); `untuned_config` (no `@triton.autotune`) and
+  `per_call_weight_prep` are added. `uncoalesced_access` and `bank_conflict` come from Nsight
+  Compute: global loads using under 24 of 32 bytes per sector, and more than 0.25 shared-memory
+  bank conflicts per load wavefront. Loads through cp.async do not count as LSU loads, so a
+  pipelined kernel has no load figure.
+- Structured replies for the analyzer and planner: the API sends the pydantic model's schema as
+  `output_config.format`, Claude Code as `--json-schema`.
+- Re-analysis after each accepted stage is deterministic (new measurements, fact-backed issues
+  recomputed); the analyzer LLM runs once per problem. Best-of-k is not built.
+- `open_ended` is a stage, run before autotuning, for the analyzer's `open_ended` proposals.
+- Every config of an autotuned kernel is checked for correctness, not only the one the autotuner
+  picks.
+
 ### Stage 6: trials, profiling, Claude Code engine
 
 - Trial tree as in Xe-Forge's `trial_manager.py`:
