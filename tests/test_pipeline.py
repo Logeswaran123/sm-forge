@@ -66,6 +66,8 @@ def test_plan(monkeypatch):
     stages, reason, usage = plan(llm, "summary", issues)
     assert stages == [Stage.FUSION, Stage.DEVICE_SPECIFIC, Stage.AUTOTUNING]
     assert reason == "fusion first" and usage.calls == 1
+    stages, _, _ = plan(llm, "summary", issues, max_stages=1)
+    assert stages == [Stage.FUSION, Stage.AUTOTUNING]
 
     def fail(request):
         raise RuntimeError("down")

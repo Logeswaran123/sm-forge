@@ -60,6 +60,7 @@ def run_pipeline(
     max_iters: int,
     workdir: Path,
     keep: int | None = 2,
+    max_stages: int | None = None,
 ) -> PipelineResult:
     workdir.mkdir(parents=True, exist_ok=True)
     spec = load_spec(problem.spec)
@@ -76,7 +77,7 @@ def run_pipeline(
     except Exception as e:
         log.warning("%s: analyzer failed, using fact-backed issues only: %s", problem.id, e)
         summary, issues = f"analyzer failed: {e}", list(found)
-    stages, reason, used = plan(llm, summary, issues)
+    stages, reason, used = plan(llm, summary, issues, max_stages)
     usage.add(used)
     result = PipelineResult(
         problem.id,

@@ -1,8 +1,9 @@
 """Choosing and ordering the stages for one kernel.
 
 Every issue type routes to one stage. The planner LLM picks and orders stages among those the
-issues route to; stages with a fact-backed issue stay in even if it leaves them out. The order
-is then corrected for hard dependencies (autotuning after everything else, fusion after
+issues route to; stages with a fact-backed issue are added after its choices, and at most
+``max_stages`` stages besides autotuning are kept, in that priority. The order is then corrected
+for hard dependencies (autotuning after everything else, fusion after
 algorithmic and dtype changes, device tuning after fusion and memory work). If the LLM call
 fails, the routed stages run in their canonical order.
 """
@@ -78,7 +79,9 @@ def order(stages: list[Stage]) -> list[Stage]:
     return ordered
 
 
-def plan(llm: Completer, summary: str, issues: list[Issue]) -> tuple[list[Stage], str, Usage]:
+def plan(
+    llm: Completer, summary: str, issues: list[Issue], max_stages: int | None = None
+) -> tuple[list[Stage], str, Usage]:
     candidates = routed(issues)
     usage = Usage()
     if len(candidates) < 2:
@@ -91,6 +94,8 @@ def plan(llm: Completer, summary: str, issues: list[Issue]) -> tuple[list[Stage]
         f"Analyzer summary:\n{summary}\n\nIssues:\n{issues_text(issues)}\n\n"
         f"Stages these issues route to:\n{by_stage}"
     )
+    if max_stages is not None:
+        task += f"\n\nChoose at most {max_stages} stages besides autotuning."
     try:
         reply, raw = ask(
             llm,
@@ -103,9 +108,17 @@ def plan(llm: Completer, summary: str, issues: list[Issue]) -> tuple[list[Stage]
         raise
     except Exception as e:
         log.warning("planner failed, using the canonical order: %s", e)
-        return candidates, f"fallback: {e}", usage
+        return _limit(candidates, max_stages), f"fallback: {e}", usage
     usage.add(raw.usage)
     chosen = [stage for stage in reply.stages if stage in candidates]
     required = {ROUTES[i.type] for i in issues if i.source != "llm"}
     chosen += [stage for stage in candidates if stage in required and stage not in chosen]
-    return order(chosen), reply.reason, usage
+    return order(_limit(chosen, max_stages)), reply.reason, usage
+
+
+def _limit(stages: list[Stage], max_stages: int | None) -> list[Stage]:
+    """The first ``max_stages`` stages other than autotuning, and autotuning if present."""
+    if max_stages is None:
+        return stages
+    others = [stage for stage in stages if stage is not Stage.AUTOTUNING][:max_stages]
+    return others + [Stage.AUTOTUNING] * (Stage.AUTOTUNING in stages)

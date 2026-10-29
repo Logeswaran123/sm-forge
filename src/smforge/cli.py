@@ -143,7 +143,11 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--ids", help="comma-separated problem ids")
     pipeline.add_argument("--source", help="only problems from this source")
     pipeline.add_argument("--split", choices=("dev", "eval"))
-    pipeline.add_argument("--max-iters", type=int, default=3, help="candidates per stage")
+    pipeline.add_argument("--max-iters", type=int, default=2, help="candidates per stage")
+    pipeline.add_argument(
+        "--max-stages", type=int, default=3, help="stages per problem besides autotuning"
+    )
+    pipeline.add_argument("--effort", help="optimizer effort (low, medium, high, xhigh, max)")
     pipeline.add_argument("--keep", type=int, default=2, help="earlier attempts kept in context")
     pipeline.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
     pipeline.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
@@ -403,6 +407,8 @@ def cmd_optimize(args: argparse.Namespace) -> int:
 
 def cmd_pipeline(args: argparse.Namespace) -> int:
     config = _llm_config(args)
+    if args.effort:
+        config.llm.efforts["optimizer"] = args.effort
     problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
     run = time.strftime("%Y%m%d-%H%M%S")
     llm = create_client(
@@ -422,7 +428,15 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
             workdir = config.cache_dir / "runs" / run / problem.id / "pipeline"
             try:
                 result = run_pipeline(
-                    problem, runner, llm, kb, profile, args.max_iters, workdir, args.keep
+                    problem,
+                    runner,
+                    llm,
+                    kb,
+                    profile,
+                    args.max_iters,
+                    workdir,
+                    args.keep,
+                    args.max_stages,
                 )
             except BudgetExceeded as e:
                 print(f"stopping: {e}", flush=True)
