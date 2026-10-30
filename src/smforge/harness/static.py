@@ -3,7 +3,9 @@
 Two checks reject patterns that pass an output comparison but are unsafe: a ``tl.dot`` that
 accumulates in fp16 or bf16 (partial sums can overflow or lose precision on real data), and a
 ``while`` loop in a kernel that polls an atomic or volatile load (a spin wait between programs
-deadlocks when the programs it waits for are not resident).
+deadlocks when the programs it waits for are not resident). A third rejects state kept across
+calls: ``forward`` and its helpers may not assign to ``self``, so nothing derived from the weights
+or the outputs is reused by a later call, as the eager and compiled baselines reuse nothing.
 """
 
 from __future__ import annotations
@@ -48,6 +50,33 @@ def validate_source(
         issues += _shared_memory(src, smem_limit, elem_bytes)
     issues += _host_syncs(src)
     issues += _unsafe_kernels(src)
+    issues += _forward_state(src)
+    return issues
+
+
+def _forward_state(src: KernelSource) -> list[ValidationIssue]:
+    issues = []
+    for fn in src.forward_path():
+        for node in ast.walk(fn):
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, ast.AugAssign | ast.AnnAssign):
+                targets = [node.target]
+            elif isinstance(node, ast.Call) and getattr(node.func, "id", None) == "setattr":
+                targets = [ast.Attribute(value=arg, attr="?") for arg in node.args[:1]]
+            for target in targets:
+                base = target.value if isinstance(target, ast.Subscript) else target
+                if isinstance(base, ast.Attribute):
+                    base = base.value
+                if isinstance(base, ast.Name) and base.id == "self" and target is not base:
+                    issues.append(
+                        _error(
+                            "state_in_forward",
+                            f"{fn.name} stores state on self; recompute it on every call",
+                            node.lineno,
+                        )
+                    )
     return issues
 
 

@@ -1,3 +1,5 @@
+import pytest
+
 from smforge.harness.static import validate_source
 
 GOOD = """
@@ -102,3 +104,25 @@ def test_spin_wait():
         "    acc = tl.zeros(",
     )
     assert checks(validate_source(code)) == ["spin_wait"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "self._cache = out",
+        "self.stats[0] = 1",
+        "self.calls += 1",
+        "setattr(self, 'packed', out)",
+    ],
+)
+def test_state_in_forward(line):
+    code = GOOD.replace("        return out\n", f"        {line}\n        return out\n")
+    assert checks(validate_source(code)) == ["state_in_forward"]
+
+
+def test_state_in_a_helper():
+    code = GOOD.replace(
+        "        return out\n",
+        "        self._keep(out)\n        return out\n\n    def _keep(self, out):\n        self.out = out\n",
+    )
+    assert checks(validate_source(code)) == ["state_in_forward"]

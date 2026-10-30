@@ -19,7 +19,8 @@ Each candidate is checked in this order, and the first failure comes back to you
 5. Timing on `bench-gpu`, interleaved with the current kernel. The candidate is kept only if it
    is faster by more than $min_effect; otherwise the current kernel stays.
 
-Keep `forward` free of host synchronization and do not cache results between calls.
+Keep `forward` free of host synchronization. `forward` keeps no state between calls: it may not
+assign to `self`, so anything derived from the weights is recomputed on every call.
 
 Target: $device. Triton $triton, PyTorch $torch.
 

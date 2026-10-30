@@ -302,3 +302,21 @@ constraints:
     partial_kernel[grid](x, partials, ...)
     combine_kernel[(rows,)](partials, y, ...)
   check: {problem: inf_softmax_vocab, expect: static, match: spin_wait}
+
+- id: no_state_in_forward
+  severity: critical
+  stages: []
+  rule: >-
+    forward and the helpers it calls may not assign to self: no caches, no precomputed weight
+    transforms reused by later calls. Everything derived from the weights is recomputed on
+    every call, as the eager and compiled baselines do. The static check rejects any store to
+    self in the forward path.
+  wrong: |
+    def forward(self, x):
+        if self._colsum is None:
+            self._colsum = colsum(self.weight)
+        return rowdot(x, self._colsum)
+  correct: |
+    def forward(self, x):
+        return rowdot(x, colsum(self.weight))
+  check: {problem: l2_014_gemm_divide_sum_scaling, expect: static, match: state_in_forward}
