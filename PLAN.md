@@ -644,6 +644,84 @@ where the autotuner picks its config anew. Per-problem rows are in `results/stag
 Exit: the full pipeline runs over the dev split, and no regression is finalized. The run report
 has accept rates and cost per stage.
 
+Built in v0.5.0, with these differences from the list above:
+
+- Issue types: `missing_tma` and `fp8_opportunity` are left out (TMA measured at parity on sm_120,
+  and no fp16 problem's tolerance admits fp8); `untuned_config` (no `@triton.autotune`) and
+  `per_call_weight_prep` are added. `uncoalesced_access` and `bank_conflict` come from Nsight
+  Compute: global loads using under 24 of 32 bytes per sector, and more than 0.25 shared-memory
+  bank conflicts per load wavefront. Loads through cp.async do not count as LSU loads, so a
+  pipelined kernel has no load figure.
+- Structured replies for the analyzer and planner: the API sends the pydantic model's schema as
+  `output_config.format`, Claude Code as `--json-schema`.
+- Re-analysis after each accepted stage is deterministic (new measurements, fact-backed issues
+  recomputed); the analyzer LLM runs once per problem. Best-of-k is not built.
+- `open_ended` is a stage, run before autotuning, for the analyzer's `open_ended` proposals.
+- Every config of an autotuned kernel is checked for correctness, not only the one the autotuner
+  picks. The check rebuilds draw 0 rather than keeping it: keeping its tensors alive moved the
+  allocator's layout, and the unmasked tail store in the `mask_tail_stores` KB check stopped
+  showing as a mismatch. The dev run below used the version that kept it.
+- Three static rejections, each a KB constraint, added after the first dev run produced kernels
+  that passed every output check: a `tl.dot` accumulating in fp16 or bf16 (l2_076, 1.68x), a
+  `while` loop polling an atomic or volatile load, which waits on other programs and deadlocks when
+  they are not resident (inf_softmax_vocab), and any assignment to `self` in the forward path
+  (l2_014 cached the weights' column sums on the first call, 9.65x). The affected problems were
+  rerun.
+- Cost controls: `--max-stages` caps the stages per problem besides autotuning, and the optimizer's
+  effort is set per role. Without them a problem cost $5 to $8.
+- Results go to `results/pipeline.csv` (one row per problem) and `results/pipeline_stages.csv`
+  (one row per stage run).
+
+Result (2026-10-30): the pipeline over the 96 dev problems, starting from the seeds, through Claude
+Code (Opus 5.5, effort medium, planner low), at most 2 stages plus autotuning and up to 2
+candidates per stage:
+
+| | |
+|---|---|
+| Improved | 80 of 96; the other 16 kept the seed, every candidate at parity, slower or wrong |
+| Regressions finalized | none |
+| Speedup over the seed | geomean 2.55x, median 1.25x |
+| Against torch.compile (`bench-gpu`) | final faster on 87 of 96, geomean 2.36x; the seeds were faster on 41, 0.93x |
+| Candidates | 393: 157 accepted, 157 parity, 66 slower, 13 wrong on `ci`; none failed the static, interface or launch checks |
+| Cost at list price | $102.58, $1.07 per problem; $10.19 of it analyzer and planner |
+
+| Stage | Accepted | Geomean of accepted | Cost |
+|---|---|---|---|
+| autotuning | 32 of 96 | 1.11x | $35.22 |
+| open_ended | 33 of 40 | 1.93x | $13.93 |
+| memory_access | 25 of 36 | 1.45x | $13.84 |
+| persistent_kernel | 19 of 25 | 1.15x | $8.73 |
+| algorithmic | 20 of 21 | 11.18x | $4.40 |
+| fusion | 14 of 20 | 1.22x | $7.47 |
+| tensor_descriptors | 8 of 10 | 1.13x | $5.06 |
+| device_specific | 4 of 6 | 1.15x | $2.91 |
+| dtype_fix | 2 of 2 | 1.17x | $0.83 |
+
+By family: Level 2 3.38x (70 problems), inference 1.26x (10), Level 1 1.15x (16). The largest
+gains are on seeds that take 17 to 136 ms: l2_065 1702x, l2_096 1065x, l2_024 354x, l2_034 85x,
+l2_003 69x. The first three finals are also 10x to 69x under torch.compile, the other two 2.3x
+and 4.4x. l2_096 is one fused kernel that
+splits the stride-2 transposed conv into its 8 parity classes and never writes the 127 MB conv
+output that eager and torch.compile write and read back.
+
+Nsight Compute was unavailable for 24 of the problems, every other dev problem from
+inf_fp8_gemm_tensorwise to l2_034: the host lost the GPU performance-counter permission partway
+through the run (`ERR_NVGPUCTRPERM`). Their analysis had no `uncoalesced_access` or `bank_conflict` input.
+
+All 80 changed kernels pass correctness on `ci` and `bench-gpu` again in a fresh worker, every
+autotune config included, and none contains the three rejected patterns. compute-sanitizer
+memcheck finds no invalid access in any of them on `ci`, every autotune config run. Per-problem
+rows are in
+`results/pipeline.csv` and `results/pipeline_stages.csv`.
+
+Known limit: float32 inputs. The pipeline checks the declared dtype only. On the upstream
+`kernelbench` shapes in float32, which 73 of the changed problems have, 23 kernels pass both as
+seed and output, 2 pass only as output, 29 fail as both (seeds that already use `tl.dot`), and 10
+run out of memory as both. 9 outputs fail where their seed passes, all declared float16: 7 call
+`tl.dot` at Triton's default precision, which rounds float32 operands to TF32, and pass with
+`TRITON_F32_DEFAULT=ieee`; l2_067 and l2_085 cast the dot operands to fp16. The seeds compute
+these convs with FFMA and are exact in float32. Accumulation is float32 in all 9.
+
 ### Stage 6: trials, profiling, Claude Code engine
 
 - Trial tree as in Xe-Forge's `trial_manager.py`:
@@ -667,6 +745,8 @@ has accept rates and cost per stage.
   - headless runs through the Claude Agent SDK or `claude -p`, with a turn cap.
 - Lessons ledger: a markdown file per kernel recording what was tried and measured. Later runs on
   the same GPU read it.
+- A float32 correctness check on the `ci` shapes, so a kernel declared float16 cannot round
+  float32 inputs to TF32 or cast them to fp16 (9 of the stage 5 dev kernels do).
 
 Exit: the Claude Code engine optimizes a dev kernel unattended and finalizes a winner. The pipeline
 harness re-measures that winner within the A/A band.

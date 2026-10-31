@@ -1,3 +1,5 @@
+import pytest
+
 from smforge.harness.static import validate_source
 
 GOOD = """
@@ -82,3 +84,45 @@ def test_host_sync_in_forward_path():
     issues = validate_source(code)
     assert checks(issues) == ["host_sync", "host_sync"]
     assert all(issue.severity == "warning" for issue in issues)
+
+
+def test_low_precision_accumulate():
+    dot = "tl.dot(tl.load(a), tl.load(b), acc)"
+    assert dot in GOOD
+    code = GOOD.replace(dot, "acc + tl.dot(tl.load(a), tl.load(b), out_dtype=tl.float16)")
+    assert checks(validate_source(code)) == ["low_precision_accumulate"]
+    fp32 = GOOD.replace(dot, "tl.dot(tl.load(a), tl.load(b), acc, out_dtype=tl.float32)")
+    assert validate_source(fp32) == []
+
+
+def test_spin_wait():
+    code = GOOD.replace(
+        "    acc = tl.zeros(",
+        "    flag = tl.atomic_add(cnt_ptr, 1)\n"
+        "    while flag < 4:\n"
+        "        flag = tl.atomic_add(cnt_ptr, 0)\n"
+        "    acc = tl.zeros(",
+    )
+    assert checks(validate_source(code)) == ["spin_wait"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "self._cache = out",
+        "self.stats[0] = 1",
+        "self.calls += 1",
+        "setattr(self, 'packed', out)",
+    ],
+)
+def test_state_in_forward(line):
+    code = GOOD.replace("        return out\n", f"        {line}\n        return out\n")
+    assert checks(validate_source(code)) == ["state_in_forward"]
+
+
+def test_state_in_a_helper():
+    code = GOOD.replace(
+        "        return out\n",
+        "        self._keep(out)\n        return out\n\n    def _keep(self, out):\n        self.out = out\n",
+    )
+    assert checks(validate_source(code)) == ["state_in_forward"]

@@ -2,6 +2,7 @@ import logging
 
 import pytest
 from anthropic.types.beta import BetaTextBlock
+from pydantic import BaseModel
 from test_seed import message, scripted
 
 from smforge.config import LLMConfig
@@ -13,6 +14,7 @@ from smforge.llm.client import (
     create_client,
     prompt_key,
 )
+from smforge.llm.structured import ask, strict_schema
 
 
 def test_prompt_key_ignores_block_type():
@@ -82,3 +84,36 @@ def test_cache_miss_is_logged(monkeypatch, caplog):
         assert not caplog.records
         llm.complete("system", turn)
     assert "read nothing from the prompt cache" in caplog.text
+
+
+class Issue(BaseModel):
+    type: str
+    description: str
+    line: int | None = None
+
+
+class Analysis(BaseModel):
+    title: str
+    issues: list[Issue]
+
+
+def test_strict_schema():
+    schema = strict_schema(Analysis)
+    assert schema["required"] == ["title", "issues"] and schema["additionalProperties"] is False
+    assert "title" not in schema
+    issue = schema["$defs"]["Issue"]
+    assert issue["required"] == ["type", "description", "line"]
+    assert issue["additionalProperties"] is False
+    assert "default" not in issue["properties"]["line"]
+
+
+def test_structured_reply(monkeypatch):
+    llm = LLMClient(LLMConfig())
+    text = '{"title": "t", "issues": [{"type": "spill", "description": "d", "line": null}]}'
+    requests = scripted(monkeypatch, llm, [text])
+    parsed, reply = ask(llm, "system", [{"role": "user", "content": "x"}], Analysis, "analyzer")
+    assert parsed.issues[0].type == "spill" and reply.usage.calls == 1
+    assert requests[0]["output_config"]["format"]["type"] == "json_schema"
+    assert requests[0]["output_config"]["format"]["schema"] == strict_schema(Analysis)
+    messages = [{"role": "user", "content": "x"}]
+    assert prompt_key("s", messages, schema=strict_schema(Analysis)) != prompt_key("s", messages)

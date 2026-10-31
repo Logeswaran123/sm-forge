@@ -38,7 +38,9 @@ class ClaudeCodeClient:
             raise ClaudeCodeError("claude not found; install Claude Code or set CLAUDE_BIN")
         return found
 
-    def complete(self, system: str, messages: list[dict], role: str | None = None) -> Reply:
+    def complete(
+        self, system: str, messages: list[dict], role: str | None = None, schema: dict | None = None
+    ) -> Reply:
         check_budget(self.config, self.usage)
         if len(messages) == 1:
             self._session = None
@@ -57,6 +59,8 @@ class ClaudeCodeClient:
             "--system-prompt",
             system,
         ]
+        if schema is not None:
+            command += ["--json-schema", json.dumps(schema)]
         if self._session is not None:
             command += ["--resume", self._session]
         prompt = messages[-1]["content"]

@@ -177,3 +177,35 @@ def test_launches_survive_an_old_worker(runner, monkeypatch):
     profile = runner.launches(KERNEL, spec=SPEC, variant="ci")
     assert calls.count("launches") == 2
     assert profile.launches[0].category is LaunchCategory.TRITON
+
+
+def autotuned(tmp_path: Path, bad_scale: int) -> Path:
+    """Two configs: the fast one is right, the slow one scales the output by ``bad_scale``."""
+    code = KERNEL.read_text()
+    code = code.replace(
+        "@triton.jit\ndef linear_relu_kernel(",
+        "@triton.autotune(\n"
+        "    configs=[\n"
+        '        triton.Config({"SCALE": 1}, num_warps=4, num_stages=3),\n'
+        f'        triton.Config({{"SCALE": {bad_scale}}}, num_warps=1, num_stages=1),\n'
+        "    ],\n"
+        '    key=["M", "N", "K"],\n'
+        ")\n@triton.jit\ndef linear_relu_kernel(",
+    )
+    code = code.replace(
+        "    BLOCK_K: tl.constexpr,\n):", "    BLOCK_K: tl.constexpr,\n    SCALE: tl.constexpr,\n):"
+    )
+    code = code.replace(
+        "    acc = tl.maximum(acc + bias", "    acc = tl.maximum(acc * SCALE + bias"
+    )
+    path = tmp_path / f"autotuned_{bad_scale}.py"
+    path.write_text(code)
+    return path
+
+
+def test_every_autotune_config_is_checked(runner, tmp_path):
+    assert runner.check(autotuned(tmp_path, 1), REFERENCE, spec=SPEC, variant="bench-gpu").passed
+    result = runner.check(autotuned(tmp_path, 2), REFERENCE, spec=SPEC, variant="bench-gpu")
+    assert not result.passed
+    assert "autotune config of linear_relu_kernel gives wrong output" in result.error
+    assert "SCALE: 2" in result.error
