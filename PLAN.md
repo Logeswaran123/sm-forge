@@ -105,8 +105,9 @@ The hardware knowledge has to be written from scratch.
 
 ## 2. Target hardware
 
-Measured on this machine with `torch.cuda.get_device_properties` and `nvidia-smi` (tessera env:
-torch 2.11.0+cu128, triton 3.6.0; CUDA 12.8 toolkit with ncu, nsys, compute-sanitizer, nvdisasm):
+Measured on the development machine with `torch.cuda.get_device_properties` and `nvidia-smi`
+(torch 2.11.0+cu128, triton 3.6.0; CUDA 12.8 toolkit with ncu, nsys, compute-sanitizer,
+nvdisasm):
 
 | Property | Value |
 |---|---|
@@ -132,8 +133,8 @@ Measured in stage 0 (`smforge device --all`, saved to `hardware/rtx5080.yaml`):
 | cuBLAS peak | fp16 116, bf16 109, tf32 53, fp32 38, fp8 234 TFLOPS |
 | A/A timing noise (p20) | under 1%; suggested min effect 1.7% |
 | nsys | works |
-| ncu | blocked: `ERR_NVGPUCTRPERM`, counters not enabled on the Windows side |
-| compute-sanitizer | blocked: WDDM debugger interface not enabled (`EnableDebuggerInterface.bat`) |
+| ncu | works once GPU performance counters are enabled on the Windows side; `ERR_NVGPUCTRPERM` before |
+| compute-sanitizer | works once the WDDM debugger interface is enabled (`EnableDebuggerInterface.bat`) |
 
 Cluster launch and clock locking were not tested. Clock locking needs root.
 
@@ -156,7 +157,7 @@ Cluster launch and clock locking were not tested. Clock locking needs root.
 ## 4. Design decisions
 
 1. **Triton first.** CUDA C++ comes in stage 7. Python 3.11+, uv, torch cu128, Triton pinned
-   (3.6.0 already works with this GPU in the tessera env).
+   (3.6.0 works on sm_120).
 
 2. **Process isolation.** Every candidate compiles and runs in a worker subprocess with a timeout.
    A worker that hits a CUDA error is discarded and a new one started. Reference outputs for each

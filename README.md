@@ -21,6 +21,37 @@ python -m venv --system-site-packages .venv
 .venv/bin/pip install -e ".[dev]"
 ```
 
+## Setup
+
+```bash
+cp .env.example .env        # set ANTHROPIC_API_KEY, or use --backend claude-code
+smforge device --all        # once per GPU: writes hardware/<gpu>.yaml
+smforge device --tools      # which of ncu, nsys and compute-sanitizer work here
+```
+
+`smforge seed`, `optimize` and `pipeline` call the Anthropic API with `ANTHROPIC_API_KEY`.
+`--backend claude-code` runs headless Claude Code on its own login instead, using `claude` on
+`PATH` or `CLAUDE_BIN`. The harness commands (`smforge-skill`, `smforge kb verify`,
+`smforge corpus baselines`) need no LLM.
+
+`smforge device --all` probes the GPU's features and measures its roofline and timing noise.
+Without a profile for the GPU, the knowledge base is not filtered for the device and the
+analyzer has no SM count or roofline. The committed `hardware/rtx5080.yaml`, the numbers in
+`results/` and the corpus `bench-gpu` shapes come from the one GPU sm-forge has been developed
+on, an RTX 5080 under WSL2.
+
+ncu, nsys and compute-sanitizer come with the CUDA toolkit and are found on `PATH`, under
+`CUDA_HOME`, or in `/usr/local/cuda*`. They are optional; without ncu the pipeline skips the
+issues that need counters (`uncoalesced_access`, `bank_conflict`).
+
+- ncu needs access to the GPU performance counters
+  ([ERR_NVGPUCTRPERM](https://developer.nvidia.com/ERR_NVGPUCTRPERM)). On Linux, load the
+  driver with `NVreg_RestrictProfilingToAdminUsers=0`. Under WSL2 the setting is on Windows:
+  NVIDIA Control Panel, Desktop > Enable Developer Settings, then Developer > Manage GPU
+  Performance Counters > Allow access to all users; then `wsl --shutdown`.
+- compute-sanitizer under WSL2 needs the Windows debugger interface: run
+  `EnableDebuggerInterface.bat` from the Windows CUDA toolkit as administrator, then reboot.
+
 ## Kernel format
 
 The Xe-Forge / KernelBench format. A kernel file defines `class Model(nn.Module)` whose
