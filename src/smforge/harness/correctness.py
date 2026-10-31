@@ -173,21 +173,24 @@ def check_kernel(
         weights=weights,
         oracle_dtype=str(upcast).removeprefix("torch.") if upcast else None,
     )
+    key = digest.hexdigest()[:24]
     diffs: list[OutputDiff] = []
-    first = None
     for draw in range(draws):
         inputs = workload.inputs(draw)
-        expected = cache.get(
-            f"{digest.hexdigest()[:24]}-{draw}", partial(_run, reference, inputs, upcast)
-        )
-        first = first or (inputs, expected)
+        expected = cache.get(f"{key}-{draw}", partial(_run, reference, inputs, upcast))
         actual = _run(model, inputs)
         torch.cuda.synchronize()
         diffs, error = compare_outputs(expected, actual, rtol, atol)
         if error or any(d.mismatched for d in diffs):
             return result(passed=False, draws=draw + 1, diffs=diffs, error=error)
-    for name, tuner in autotuners(candidate_module).items():
-        failure = _check_configs(name, tuner, model, *first, rtol, atol)
+    tuners = autotuners(candidate_module)
+    if tuners:
+        # Draw 0 is rebuilt, not kept: holding its tensors through the draws moves the
+        # allocator's layout, and an unmasked tail store then lands outside every compared tensor.
+        inputs = workload.inputs(0)
+        expected = cache.get(f"{key}-0", partial(_run, reference, inputs, upcast))
+    for name, tuner in tuners.items():
+        failure = _check_configs(name, tuner, model, inputs, expected, rtol, atol)
         if failure is not None:
             return result(passed=False, draws=draws, diffs=failure[0], error=failure[1])
     return result(passed=True, draws=draws, diffs=diffs)
