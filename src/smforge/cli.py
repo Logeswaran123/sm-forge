@@ -499,6 +499,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                 PIPELINE_STAGES,
                 STAGE_FIELDS,
                 STAGE_KEY,
+                drop={"problem": problem.id},
             )
     print(
         f"improved {improved} of {len(problems)}; "

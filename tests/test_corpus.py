@@ -99,6 +99,10 @@ def test_results_upsert(tmp_path):
     upsert([{**row, "time_us": "9"}], path)
     times = {r["mode"]: r["time_us"] for r in load_results(path)}
     assert times == {"compile": "8", "eager": "9"}
+    other = {**row, "problem": "q"}
+    upsert([other, {**row, "time_us": "7"}], path, drop={"problem": "p"})
+    rows = {(r["problem"], r["mode"]): r["time_us"] for r in load_results(path)}
+    assert rows == {("p", "eager"): "7", ("q", "eager"): "10"}
 
 
 @pytest.fixture(scope="module")

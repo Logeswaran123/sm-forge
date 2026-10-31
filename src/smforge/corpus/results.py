@@ -76,9 +76,13 @@ def upsert(
     path: Path = RESULTS,
     fields: tuple[str, ...] = FIELDS,
     key: tuple[str, ...] = KEY,
+    drop: dict[str, str] | None = None,
 ) -> None:
-    """Replace rows with the same key; keep the rest."""
-    merged = {tuple(row[k] for k in key): row for row in load_results(path)}
+    """Replace rows with the same key; keep the rest, except rows matching all of ``drop``."""
+    old = load_results(path)
+    if drop:
+        old = [row for row in old if any(row[k] != v for k, v in drop.items())]
+    merged = {tuple(row[k] for k in key): row for row in old}
     for row in rows:
         merged[tuple(str(row[k]) for k in key)] = {f: row.get(f, "") for f in fields}
     path.parent.mkdir(parents=True, exist_ok=True)
