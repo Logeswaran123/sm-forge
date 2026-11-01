@@ -33,6 +33,7 @@ class Candidate:
     outcome: str
     detail: str
     speedup: float | None = None
+    summary: str = ""
 
 
 @dataclass
@@ -138,6 +139,8 @@ def optimize_stage(
     result.attempts = [
         candidates.get(i) or Candidate(i, "no_code", NO_CODE) for i in range(len(run.attempts))
     ]
+    for candidate, attempt in zip(result.attempts, run.attempts, strict=True):
+        candidate.summary = attempt.summary
     (workdir / "attempts.json").write_text(
         json.dumps([asdict(a) for a in result.attempts], indent=1)
     )

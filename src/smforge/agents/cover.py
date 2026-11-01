@@ -22,6 +22,7 @@ class Attempt:
     code: str | None
     passed: bool
     feedback: str
+    summary: str = ""
 
 
 @dataclass
@@ -43,6 +44,13 @@ def extract_code(text: str) -> str | None:
     return blocks[-1] if blocks else None
 
 
+def extract_summary(text: str, limit: int = 300) -> str:
+    """The first line of the reply outside its code blocks."""
+    prose = _CODE_BLOCK.sub("", text).strip()
+    line = prose.splitlines()[0].strip() if prose else ""
+    return line if len(line) <= limit else line[: limit - 3] + "..."
+
+
 def cover(
     llm: Completer,
     system: str,
@@ -62,7 +70,7 @@ def cover(
         result.usage.add(reply.usage)
         code = extract_code(reply.text)
         passed, feedback = verify(code, attempt) if code is not None else (False, NO_CODE)
-        result.attempts.append(Attempt(code=code, passed=passed, feedback=feedback))
+        result.attempts.append(Attempt(code, passed, feedback, extract_summary(reply.text)))
         if passed:
             result.code = code
             return result
