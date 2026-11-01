@@ -24,6 +24,7 @@ from smforge import render
 from smforge.config import get_config
 from smforge.corpus.catalog import Problem, load_problems
 from smforge.device.profile import find_profile
+from smforge.device.tools import find_tool
 from smforge.harness.audit import audit_launches, audit_source
 from smforge.harness.ncu import NcuError, diff_profiles, profile_sections, render_profile
 from smforge.harness.runner import Runner
@@ -256,7 +257,7 @@ def cmd_trial_save(args: argparse.Namespace) -> int:
     tree = TrialTree(args.dir)
     trial = tree.save(args.kernel, args.parent, args.strategy)
     with Runner() as runner:
-        outcome = tree.evaluate(trial, runner)
+        outcome = tree.evaluate(trial, runner, find_tool("compute-sanitizer") is not None)
     head = f"{trial.id} (from {trial.parent}): {outcome.kind}"
     if trial.speedup is not None:
         head += (

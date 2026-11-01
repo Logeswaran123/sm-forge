@@ -88,6 +88,7 @@ def optimize_stage(
     keep: int | None = 2,
     notes: str | None = None,
     measured: Measurements | None = None,
+    sanitize_failures: bool = False,
 ) -> StageResult:
     """Run one stage from ``kernel``; ``measured`` reuses measurements of it already taken."""
     spec = load_spec(problem.spec)
@@ -120,7 +121,7 @@ def optimize_stage(
     def verify(code: str, attempt: int) -> tuple[bool, str]:
         path = workdir / f"attempt-{attempt}.py"
         path.write_text(code)
-        outcome = check_candidate(runner, problem, spec, base, path)
+        outcome = check_candidate(runner, problem, spec, base, path, sanitize_failures)
         comparison = outcome.comparison
         speedup = comparison.speedup if comparison else None
         candidates[attempt] = Candidate(

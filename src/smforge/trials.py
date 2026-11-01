@@ -169,10 +169,12 @@ class TrialTree:
         self.write()
         return trial
 
-    def evaluate(self, trial: Trial, runner: Runner) -> Outcome:
+    def evaluate(self, trial: Trial, runner: Runner, sanitize_failures: bool = False) -> Outcome:
         """Check ``trial`` against ``t0`` and record what the checks found."""
         spec = load_spec(self.problem.spec)
-        outcome = check_candidate(runner, self.problem, spec, self.base(), self.path(trial))
+        outcome = check_candidate(
+            runner, self.problem, spec, self.base(), self.path(trial), sanitize_failures
+        )
         self.record(trial, outcome)
         if self.state.ledger is not None:
             lessons.add(

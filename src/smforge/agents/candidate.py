@@ -3,7 +3,8 @@
 The checks run cheapest first and stop at the first failure: the static checks and the source
 audit, the harness interface (``Model.__init__``, ``get_inputs``, ``get_init_inputs`` unchanged),
 correctness on ``ci`` and ``bench-gpu``, float32 correctness on ``ci`` when the base kernel has it,
-the launch audit, and an interleaved A/B against the base kernel.
+the launch audit, and an interleaved A/B against the base kernel. A candidate that crashes or
+mismatches can be run under compute-sanitizer, and its findings go into the feedback.
 
 A KernelBench problem is float32, and its ``bench-gpu`` and ``ci`` variants run it in float16 or
 bfloat16. The float32 check runs ``ci`` with the declared float32 inputs and float32 tolerances,
@@ -14,6 +15,7 @@ applies when the base kernel passes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,12 +24,16 @@ from smforge.agents.seed import CHECK_VARIANTS, check_feedback
 from smforge.corpus.catalog import Problem
 from smforge.harness.audit import audit_interface, audit_launches, audit_source
 from smforge.harness.runner import Runner, WorkerError
+from smforge.harness.sanitizer import SanitizerError, sanitize
 from smforge.harness.static import validate_source
 from smforge.models import CheckResult, Comparison, FactsReport, LaunchProfile, Severity, Verdict
 from smforge.spec import KernelSpec, load_spec
 
 TIMED_VARIANT = "bench-gpu"
 FLOAT32_VARIANT = "ci"
+_FAULT = re.compile(
+    r"CUDA error|illegal memory|misaligned address|unspecified launch failure|worker exited"
+)
 FLOAT32_ADVICE = (
     "The problem's inputs are float32; the benchmark runs them in a lower precision. The kernel "
     'must stay correct on float32 inputs: give tl.dot input_precision="ieee" (ignored for '
@@ -103,9 +109,28 @@ def float32_note(base: Base) -> str | None:
     )
 
 
+def diagnose(problem: Problem, path: Path) -> str | None:
+    """memcheck, then racecheck, on ``ci``: the report of the first that finds errors."""
+    variant = "ci" if "ci" in load_spec(problem.spec).variants else None
+    for tool in ("memcheck", "racecheck"):
+        try:
+            report = sanitize(path, tool, problem.spec, variant)
+        except SanitizerError:
+            return None
+        if report.errors:
+            return render.sanitizer(report)
+    return None
+
+
 def check_candidate(
-    runner: Runner, problem: Problem, spec: KernelSpec, base: Base, path: Path
+    runner: Runner,
+    problem: Problem,
+    spec: KernelSpec,
+    base: Base,
+    path: Path,
+    sanitize_failures: bool = False,
 ) -> Outcome:
+    """``sanitize_failures`` adds compute-sanitizer findings to a crash or a mismatch."""
     code = path.read_text()
     issues = validate_source(code)
     if not any(issue.check == "syntax_error" for issue in issues):
@@ -118,7 +143,11 @@ def check_candidate(
         if name in spec.variants:
             check = runner.check(path, problem.reference, spec=problem.spec, variant=name)
             if not check.passed:
-                return Outcome("error" if check.error else "mismatch", check_feedback(name, check))
+                feedback = check_feedback(name, check)
+                if sanitize_failures and (not check.error or _FAULT.search(check.error)):
+                    if found := diagnose(problem, path):
+                        feedback += f"\n\ncompute-sanitizer on `ci`:\n{found}"
+                return Outcome("error" if check.error else "mismatch", feedback)
     if base.float32:
         check = check_float32(runner, path, problem)
         if not check.passed:

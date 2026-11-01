@@ -125,6 +125,7 @@ def run_pipeline(
             keep,
             notes,
             measured,
+            memcheck,
         )
         result.stages.append(stage_result)
         result.usage.add(stage_result.usage)

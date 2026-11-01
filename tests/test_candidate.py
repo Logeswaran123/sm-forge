@@ -29,3 +29,22 @@ def test_float32_regression_is_rejected(tmp_path):
         assert not reverse.float32 and float32_note(reverse) is None
         outcome = check_candidate(runner, problem, load_spec(problem.spec), reverse, problem.seed)
         assert outcome.correct
+
+
+def test_mismatch_gets_sanitizer_findings(tmp_path):
+    problem = copy_problem(tmp_path)
+    good = (PROBLEM / "kernel.py").read_text()
+    problem.seed.write_text(good)
+    old = "y = y_ptr + offs_m[:, None] * stride_ym"
+    assert old in good
+    shifted = tmp_path / "shifted.py"
+    shifted.write_text(good.replace(old, "y = y_ptr + (offs_m[:, None] + 1) * stride_ym"))
+    config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=20, rounds=2))
+    spec = load_spec(problem.spec)
+    with Runner(config) as runner:
+        base = make_base(runner, problem, problem.seed)
+        outcome = check_candidate(runner, problem, spec, base, shifted, sanitize_failures=True)
+    assert outcome.kind == "mismatch"
+    if "compute-sanitizer on `ci`" not in outcome.feedback:
+        pytest.skip("compute-sanitizer does not run here")
+    assert "memcheck:" in outcome.feedback and "Invalid __global__ write" in outcome.feedback
