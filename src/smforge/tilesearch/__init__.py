@@ -293,6 +293,15 @@ def search(
             trial = evaluate(config, shape, root, runner, smem)
             result.trials.append(trial)
             log.info("%s: %s", shape.label, trial.row)
+    (root / "trials.json").write_text(
+        json.dumps(
+            [
+                {"config": t.config.label, "status": t.status, "us": t.us, "detail": t.detail}
+                for t in [default_trial, fitted_trial, *result.trials]
+            ],
+            indent=1,
+        )
+    )
     timed = [t for t in result.trials if t.us is not None]
     if not timed:
         return result
