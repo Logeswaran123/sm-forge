@@ -13,6 +13,13 @@ class Severity(StrEnum):
     WARNING = "warning"
 
 
+class Dsl(StrEnum):
+    """A kernel file's language: ``cuda`` files import ``smforge.cuda``, the rest are Triton."""
+
+    TRITON = "triton"
+    CUDA = "cuda"
+
+
 class Stage(StrEnum):
     """Optimization stages, in the order the planner considers them."""
 
@@ -91,6 +98,7 @@ class CheckResult(BaseModel):
 
 class LaunchCategory(StrEnum):
     TRITON = "triton"
+    CUDA = "cuda"
     VENDOR = "vendor"
     ATEN_COMPUTE = "aten_compute"
     ATEN_DATA = "aten_data"

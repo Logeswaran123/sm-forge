@@ -1,4 +1,7 @@
-"""Static checks on a Triton kernel file. Source analysis only, no GPU.
+"""Static checks on a kernel file. Source analysis only, no GPU.
+
+A ``cuda`` file's CUDA and C++ sources are checked by ``cuda_static``; the checks below that
+concern ``tl.dot``, ``tl.arange`` and ``triton.Config`` apply to Triton files.
 
 Two checks reject patterns that pass an output comparison but are unsafe: a ``tl.dot`` that
 accumulates in fp16 or bf16 (partial sums can overflow or lose precision on real data), and a
@@ -13,8 +16,9 @@ from __future__ import annotations
 import ast
 import re
 
+from smforge.harness import cuda_static
 from smforge.harness.source import KernelSource
-from smforge.models import Severity, ValidationIssue
+from smforge.models import Dsl, Severity, ValidationIssue
 
 MAX_WARPS = 32
 MIN_DOT_DIM = 16
@@ -44,12 +48,15 @@ def validate_source(
     except SyntaxError as e:
         return [_error("syntax_error", f"Python syntax error: {e.msg}", e.lineno)]
     issues = _structure(src)
-    issues += _constants(src)
-    issues += _aranges(src)
-    if smem_limit and elem_bytes:
-        issues += _shared_memory(src, smem_limit, elem_bytes)
+    if src.dsl is Dsl.CUDA:
+        issues += cuda_static.check(src)
+    else:
+        issues += _constants(src)
+        issues += _aranges(src)
+        if smem_limit and elem_bytes:
+            issues += _shared_memory(src, smem_limit, elem_bytes)
+        issues += _unsafe_kernels(src)
     issues += _host_syncs(src)
-    issues += _unsafe_kernels(src)
     issues += _forward_state(src)
     return issues
 
@@ -122,10 +129,32 @@ def _unsafe_kernels(src: KernelSource) -> list[ValidationIssue]:
 
 def _structure(src: KernelSource) -> list[ValidationIssue]:
     issues = []
-    if not any(path.startswith("triton") for path in src.aliases.values()):
-        issues.append(_error("missing_triton_import", "the file does not import triton"))
-    if not src.triton_functions:
-        issues.append(_error("missing_triton_kernel", "no @triton.jit function"))
+    if src.dsl is Dsl.CUDA:
+        cuda = src.cuda_sources("cuda")
+        if not src.extensions:
+            issues.append(
+                _error(
+                    "missing_build",
+                    "no module-level `ext = build(CUDA_SRC, CPP_SRC, [...])` from smforge.cuda",
+                )
+            )
+        elif not cuda or not src.cuda_sources("cpp"):
+            issues.append(
+                _error(
+                    "missing_cuda_source",
+                    "build() must get its CUDA and C++ sources as module-level string constants",
+                    next(iter(src.extensions.values())).line,
+                )
+            )
+        elif not any(cuda_static.kernels(s.text) or "cutlass/" in s.text for s in cuda):
+            issues.append(
+                _error("missing_cuda_kernel", "no __global__ kernel and no CUTLASS include")
+            )
+    else:
+        if not any(path.startswith("triton") for path in src.aliases.values()):
+            issues.append(_error("missing_triton_import", "the file does not import triton"))
+        if not src.triton_functions:
+            issues.append(_error("missing_triton_kernel", "no @triton.jit function"))
     if src.model is None:
         issues.append(_error("missing_model", "no class Model"))
     elif "forward" not in src.methods:
