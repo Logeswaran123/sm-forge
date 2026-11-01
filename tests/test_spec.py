@@ -91,3 +91,15 @@ def test_evaluate(expr, value):
 def test_evaluate_rejects(expr):
     with pytest.raises(ValueError):
         evaluate(expr, {"M": 2})
+
+
+def test_declared_dtype():
+    from smforge.agents.candidate import float32_applies
+
+    spec = parse_spec(
+        yaml.safe_load(CONV_SPEC.replace("dtype: bfloat16\n\ninits", "dtype: float32\n\ninits"))
+    )
+    ci = spec.variant("ci")
+    assert spec.dtype(ci) == "bfloat16" and spec.declared_dtype(ci) == "float32"
+    assert float32_applies(spec)
+    assert not float32_applies(parse_spec(yaml.safe_load(CONV_SPEC)))

@@ -113,10 +113,15 @@ class Workload:
         variant: str | None,
         index: int,
         fallback: str,
+        dtype: str | None = None,
     ) -> Workload:
+        """``dtype``, when given, replaces the variant's dtype."""
         if spec:
             kernel_spec = load_spec(spec)
-            return cls(device, kernel_spec, kernel_spec.variant(variant, index))
+            entry = kernel_spec.variant(variant, index)
+            if dtype is not None:
+                entry = entry.model_copy(update={"dtype": dtype})
+            return cls(device, kernel_spec, entry)
         return cls(device, module=load_module(fallback))
 
     @property
