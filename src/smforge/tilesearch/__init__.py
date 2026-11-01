@@ -211,9 +211,10 @@ class Trial:
 @dataclass
 class SearchResult:
     """``cublas_us`` is the first bench of the reference, which the proposals see. The final
-    numbers come from interleaved A/B runs: the best config against the fitted default
-    (``default_us``, ``best_us``, ``vs_default``) and against cuBLAS (``final_cublas_us``,
-    ``vs_cublas``). A single bench can land in one of the host's slow spells."""
+    numbers come from interleaved A/B runs, each in a fresh worker: the best config against the
+    fitted default (``default_us``, ``best_us``, ``vs_default``) and against cuBLAS
+    (``final_cublas_us``, ``vs_cublas``). A single bench can land in one of the host's slow
+    spells."""
 
     shape: GemmShape
     default: Trial
@@ -233,9 +234,11 @@ class SearchResult:
 
 
 def evaluate(config: GemmConfig, shape: GemmShape, root: Path, runner: Runner, smem: int) -> Trial:
-    """Validate, render, check on ``ci`` and ``bench-gpu``, and time on ``bench-gpu``."""
+    """Validate, render, check on ``ci`` and ``bench-gpu``, and time on ``bench-gpu``, in a fresh
+    worker: in a long-lived one, the CUTLASS default config once timed 4x slower than alone."""
     if reason := validate(config, shape, smem):
         return Trial(config, "invalid", detail=reason)
+    runner.close()
     path = root / f"{config.label}.py"
     path.write_text(render(config, shape))
     problem = {"spec": root / "spec.yaml"}
@@ -263,6 +266,7 @@ def search(
     smem = profile.device.smem_per_block
     root = write_problem(shape, workdir / shape.label)
     reference = root / "reference.py"
+    runner.close()
     cublas = runner.bench(reference, spec=root / "spec.yaml", variant="bench-gpu").time_us
     default, fitted = default_config(smem)
     default_trial = evaluate(default, shape, root, runner, smem)
@@ -297,9 +301,11 @@ def search(
     spec = root / "spec.yaml"
     if fitted_trial.us is not None:
         baseline = root / f"{fitted.label}.py"
+        runner.close()
         comparison = runner.compare(baseline, best, spec=spec, variant="bench-gpu")
         result.default_us, result.best_us = comparison.baseline_us, comparison.candidate_us
         result.vs_default = comparison.speedup
+    runner.close()
     comparison = runner.compare(reference, best, spec=spec, variant="bench-gpu")
     result.final_cublas_us, result.vs_cublas = comparison.baseline_us, comparison.speedup
     result.best_us = result.best_us or comparison.candidate_us
