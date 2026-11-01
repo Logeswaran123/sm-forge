@@ -42,6 +42,8 @@ def test_validate():
     assert "accumulators" in validate(config(warp=(128, 64, 32)), shape, SMEM)
     assert "144 KB" in validate(config((128, 256, 64), (64, 64, 64), 3), shape, SMEM)
     assert "split_k" in validate(config(split_k=256), shape, SMEM)
+    assert "even" in validate(config(), GemmShape.parse("8205x5921x2949:row"), SMEM)
+    assert validate(config(), GemmShape.parse("8205x5922x2950:row"), SMEM) is None
     default, fitted = default_config(SMEM)
     assert default.stages == 3 and fitted.stages == 2 and validate(fitted, shape, SMEM) is None
 

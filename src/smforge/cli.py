@@ -738,12 +738,16 @@ def _probe(runner: Runner, name: str) -> ProbeResult:
 
 
 def cmd_tile_search(args: argparse.Namespace) -> int:
-    from smforge.tilesearch import GemmShape, search
+    from smforge.tilesearch import GemmShape, search, unsupported
 
     config = _llm_config(args)
     if args.effort:
         config.llm.efforts["tilesearch"] = args.effort
     shapes = [GemmShape.parse(text) for text in args.shapes.split(",")]
+    for shape in shapes:
+        if reason := unsupported(shape):
+            print(f"{shape.label}: not searched: {reason}", file=sys.stderr)
+    shapes = [shape for shape in shapes if not unsupported(shape)]
     profile = find_profile(config.hardware_dir, config.device)
     if profile is None:
         print("no hardware profile: run `smforge device` first", file=sys.stderr)

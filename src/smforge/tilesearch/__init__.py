@@ -103,8 +103,22 @@ def alignment(extent: int) -> int:
     return next(a for a in (8, 4, 2, 1) if extent % a == 0)
 
 
+def unsupported(shape: GemmShape) -> str | None:
+    """Why no SM80 config can run this shape: ``cp.async`` copies 4, 8 or 16 bytes, so the
+    rows of A and B must start on 4-byte boundaries."""
+    b_extent = shape.k if shape.b_layout == "col" else shape.n
+    if min(alignment(shape.k), alignment(b_extent)) < 2:
+        return (
+            f"rows of A ({shape.k} elements) and B ({b_extent}) must be even for cp.async's "
+            "4-byte minimum copy"
+        )
+    return None
+
+
 def validate(config: GemmConfig, shape: GemmShape, smem_limit: int) -> str | None:
     """Why the config cannot build or run on this shape and device, or None."""
+    if reason := unsupported(shape):
+        return reason
     (tm, tn, tk), (wm, wn, wk) = config.tile, config.warp
     if tm % wm or tn % wn or tk != wk:
         return "the warp tile must divide the threadblock tile, with the same K"
