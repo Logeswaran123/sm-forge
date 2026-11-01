@@ -38,6 +38,9 @@ from smforge.corpus.results import (
     STAGE_FIELDS,
     STAGE_KEY,
     STAGES,
+    TILESEARCH,
+    TILESEARCH_FIELDS,
+    TILESEARCH_KEY,
     provenance,
     upsert,
 )
@@ -202,6 +205,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-memcheck", action="store_true", help="finalize without compute-sanitizer memcheck"
     )
     claude.set_defaults(func=cmd_claude)
+
+    tiles = commands.add_parser(
+        "tile-search", help="search CUTLASS GEMM tile configs with the LLM (stage 7)"
+    )
+    tiles.add_argument(
+        "--shapes", required=True, help="comma-separated MxNxK, optionally :bfloat16 and :row"
+    )
+    tiles.add_argument("--rounds", type=int, default=3, help="proposal rounds per shape")
+    tiles.add_argument("--per-round", type=int, default=6, help="configs per round")
+    tiles.add_argument("--effort", help="proposer effort (low, medium, high, xhigh, max)")
+    tiles.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    tiles.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    tiles.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
+    tiles.set_defaults(func=cmd_tile_search)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
@@ -669,8 +686,8 @@ def _tool_ok(name: str, consequence: str) -> bool:
     return status.ok
 
 
-def _fmt(value: float | None) -> str:
-    return f"{value:.3f}" if value is not None else ""
+def _fmt(value: float | None, spec: str = ".3f") -> str:
+    return format(value, spec) if value is not None else ""
 
 
 def _llm_config(args: argparse.Namespace):
@@ -718,6 +735,76 @@ def _probe(runner: Runner, name: str) -> ProbeResult:
         return ProbeResult.model_validate(runner.call("probe", name=name))
     except WorkerError as e:
         return ProbeResult(name=name, compiled=False, error=str(e))
+
+
+def cmd_tile_search(args: argparse.Namespace) -> int:
+    from smforge.tilesearch import GemmShape, search
+
+    config = _llm_config(args)
+    if args.effort:
+        config.llm.efforts["tilesearch"] = args.effort
+    shapes = [GemmShape.parse(text) for text in args.shapes.split(",")]
+    profile = find_profile(config.hardware_dir, config.device)
+    if profile is None:
+        print("no hardware profile: run `smforge device` first", file=sys.stderr)
+        return 2
+    run = time.strftime("%Y%m%d-%H%M%S")
+    llm = create_client(config.llm, transcripts=config.cache_dir / "transcripts" / run)
+    with Runner(config) as runner:
+        stamp = provenance(runner.call("device"))
+        for shape in shapes:
+            try:
+                result = search(
+                    shape,
+                    runner,
+                    llm,
+                    profile,
+                    config.cache_dir / "runs" / run / "tilesearch",
+                    args.rounds,
+                    args.per_round,
+                )
+            except BudgetExceeded as e:
+                print(f"{e}\nstopped at {shape.label}", file=sys.stderr)
+                return 2
+            best, fitted = result.best, result.fitted
+            print(
+                f"{shape.label}: cuBLAS {result.cublas_us:.1f} us; default "
+                f"{result.default.row}; fitted {fitted.row}",
+                flush=True,
+            )
+            if best is not None:
+                print(
+                    f"  best {best.row} ({result.tflops(best.us):.1f} TFLOPS); "
+                    f"vs default {_fmt(result.vs_default)}x, vs cuBLAS {_fmt(result.vs_cublas)}x",
+                    flush=True,
+                )
+            upsert(
+                [
+                    {
+                        "shape": shape.label,
+                        "cublas_us": f"{result.cublas_us:.2f}",
+                        "default": fitted.config.label,
+                        "default_us": _fmt(fitted.us, ".2f"),
+                        "best": best.config.label if best else "",
+                        "best_us": _fmt(best.us if best else None, ".2f"),
+                        "best_tflops": _fmt(result.tflops(best.us) if best else None, ".1f"),
+                        "vs_default": _fmt(result.vs_default),
+                        "vs_cublas": _fmt(result.vs_cublas),
+                        "configs": len(result.trials),
+                        "invalid": sum(t.status == "invalid" for t in result.trials),
+                        "failed": sum(
+                            t.us is None and t.status != "invalid" for t in result.trials
+                        ),
+                        "cost_usd": f"{result.usage.cost_usd:.4f}",
+                        "model": config.llm.model,
+                        **stamp,
+                    }
+                ],
+                TILESEARCH,
+                TILESEARCH_FIELDS,
+                TILESEARCH_KEY,
+            )
+    return 0
 
 
 def cmd_kb_list(args: argparse.Namespace) -> int:

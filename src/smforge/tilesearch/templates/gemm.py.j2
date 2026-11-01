@@ -1,0 +1,89 @@
+"""CUTLASS SM80 GEMM, {{ label }}: C[M, N] = A[M, K] @ {{ "B[N, K].T" if b_layout == "col" else "B[K, N]" }}, {{ dtype }}, float accumulate."""
+
+import torch
+import torch.nn as nn
+
+from smforge.cuda import build
+
+CUDA_SRC = r"""
+#include <cuda_runtime.h>
+{% if split_k > 1 %}
+#include "cutlass/gemm/device/gemm_splitk_parallel.h"
+
+// Parallel split-K: each slice writes float partials to the workspace, a second kernel sums them.
+using T = {{ element }};
+using Gemm = cutlass::gemm::device::GemmSplitKParallel<
+    T, cutlass::layout::RowMajor,
+    T, cutlass::layout::{{ "ColumnMajor" if b_layout == "col" else "RowMajor" }},
+    T, cutlass::layout::RowMajor,
+    float, cutlass::arch::OpClassTensorOp, cutlass::arch::Sm80,
+    cutlass::gemm::GemmShape<{{ tile[0] }}, {{ tile[1] }}, {{ tile[2] }}>,
+    cutlass::gemm::GemmShape<{{ warp[0] }}, {{ warp[1] }}, {{ warp[2] }}>,
+    cutlass::gemm::GemmShape<16, 8, 16>,
+    cutlass::epilogue::thread::LinearCombination<T, {{ align_c }}, float, float>,
+    cutlass::epilogue::thread::Convert<float, {{ [align_c, 4] | min }}, float>,
+    cutlass::reduction::thread::ReduceAdd<float, float, {{ align_c }}>,
+    cutlass::gemm::threadblock::GemmSplitKHorizontalThreadblockSwizzle,
+    {{ stages }}, {{ align_a }}, {{ align_b }}>;
+{% else %}
+#include "cutlass/gemm/device/gemm.h"
+
+using T = {{ element }};
+using Gemm = cutlass::gemm::device::Gemm<
+    T, cutlass::layout::RowMajor,
+    T, cutlass::layout::{{ "ColumnMajor" if b_layout == "col" else "RowMajor" }},
+    T, cutlass::layout::RowMajor,
+    float, cutlass::arch::OpClassTensorOp, cutlass::arch::Sm80,
+    cutlass::gemm::GemmShape<{{ tile[0] }}, {{ tile[1] }}, {{ tile[2] }}>,
+    cutlass::gemm::GemmShape<{{ warp[0] }}, {{ warp[1] }}, {{ warp[2] }}>,
+    cutlass::gemm::GemmShape<16, 8, 16>,
+    cutlass::epilogue::thread::LinearCombination<T, {{ align_c }}, float, float>,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<{{ swizzle }}>,
+    {{ stages }}, {{ align_a }}, {{ align_b }}>;
+{% endif %}
+
+static Gemm::Arguments arguments(const void* a, const void* b, void* c, int m, int n, int k) {
+  return Gemm::Arguments({m, n, k}, {(const T*)a, k}, {(const T*)b, {{ "k" if b_layout == "col" else "n" }}},
+                         {(T*)c, n}, {(T*)c, n}, {1.0f, 0.0f}, {{ split_k }});
+}
+
+size_t gemm_workspace(int m, int n, int k) {
+  return Gemm::get_workspace_size(arguments(nullptr, nullptr, nullptr, m, n, k));
+}
+
+int gemm(const void* a, const void* b, void* c, int m, int n, int k, void* workspace,
+         cudaStream_t stream) {
+  Gemm op;
+  auto args = arguments(a, b, c, m, n, k);
+  cutlass::Status status = op.can_implement(args);
+  if (status == cutlass::Status::kSuccess) status = op.initialize(args, workspace{{ "" if split_k > 1 else ", stream" }});
+  if (status == cutlass::Status::kSuccess) status = op.run(stream);
+  return int(status);
+}
+"""
+
+CPP_SRC = r"""
+size_t gemm_workspace(int m, int n, int k);
+int gemm(const void* a, const void* b, void* c, int m, int n, int k, void* workspace,
+         cudaStream_t stream);
+
+torch::Tensor forward(torch::Tensor a, torch::Tensor b) {
+  TORCH_CHECK(a.is_contiguous() && b.is_contiguous(), "contiguous inputs");
+  TORCH_CHECK(a.scalar_type() == torch::k{{ "Half" if dtype == "float16" else "BFloat16" }} && b.scalar_type() == a.scalar_type());
+  int m = a.size(0), k = a.size(1), n = b.size({{ 0 if b_layout == "col" else 1 }});
+  auto c = torch::empty({m, n}, a.options());
+  auto workspace = torch::empty({(long)gemm_workspace(m, n, k) + 1}, a.options().dtype(torch::kUInt8));
+  int status = gemm(a.data_ptr(), b.data_ptr(), c.data_ptr(), m, n, k, workspace.data_ptr(),
+                    at::cuda::getCurrentCUDAStream());
+  TORCH_CHECK(status == 0, "CUTLASS status ", status);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return c;
+}
+"""
+
+ext = build(CUDA_SRC, CPP_SRC, ["forward"])
+
+
+class Model(nn.Module):
+    def forward(self, a, b):
+        return ext.forward(a.contiguous(), b.contiguous())
