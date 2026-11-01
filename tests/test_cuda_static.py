@@ -104,3 +104,29 @@ def test_warnings():
 def test_extension_calls_are_kernels():
     assert found(kernel_file(forward="ext.relu(x)")) == {}
     assert "tensor_compute_method" in found(kernel_file(forward="x.relu()"))
+
+
+def prompt_example() -> str:
+    from smforge.llm.prompting import PROMPTS
+
+    text = (PROMPTS / "cuda" / "format.md").read_text()
+    code = text.split("```python\n")[1].split("```")[0]
+    return (
+        code
+        + "\n\nclass Model(nn.Module):\n    def forward(self, x):\n        return ext.forward(x, 2.0)\n"
+    )
+
+
+def test_prompt_example_passes():
+    assert found(prompt_example()) == {}
+
+
+def test_problem_dsl(tmp_path):
+    from smforge.corpus.catalog import Problem
+    from smforge.models import Dsl
+
+    problem = Problem(id="p", source="s", family="f", path=tmp_path)
+    cuda = problem.for_dsl(Dsl.CUDA)
+    assert problem.seed.name == "kernel.py" and problem.seed_record.name == "seed.yaml"
+    assert cuda.seed.name == "kernel_cuda.py" and cuda.seed_record.name == "seed_cuda.yaml"
+    assert "dsl" not in cuda.model_dump()

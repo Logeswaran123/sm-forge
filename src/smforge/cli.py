@@ -13,7 +13,7 @@ from pathlib import Path
 
 from smforge import render
 from smforge.agents.candidate import spread
-from smforge.agents.optimize import PROMPTS, optimize_stage
+from smforge.agents.optimize import optimize_stage
 from smforge.agents.pipeline import memcheck_summary, run_pipeline
 from smforge.agents.seed import seed_problem
 from smforge.claude_ws import ClaudeSessionError, run_claude
@@ -46,7 +46,7 @@ from smforge.device.tools import check_tools, tool_status
 from smforge.harness.ncu import NcuUnavailable
 from smforge.harness.runner import Runner, WorkerError
 from smforge.harness.sanitizer import SanitizerUnavailable
-from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
+from smforge.kb.loader import TOKEN_BUDGET, kb_dir, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.lessons import ledger_path
 from smforge.llm.claude_code import ClaudeCodeError
@@ -57,10 +57,20 @@ from smforge.llm.client import (
     ReplayMiss,
     create_client,
 )
-from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline, Stage
+from smforge.llm.prompting import PROMPTS
+from smforge.models import (
+    DeviceInfo,
+    DeviceProfile,
+    Dsl,
+    NoiseResult,
+    ProbeResult,
+    Roofline,
+    Stage,
+)
 from smforge.spec import load_spec
 
 STAGE_PROMPTS = {path.stem for path in (PROMPTS / "stages").glob("*.md")}
+DSLS = [dsl.value for dsl in Dsl]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     seed = commands.add_parser("seed", help="write a seed kernel for corpus problems with the LLM")
     seed.add_argument("--ids", help="comma-separated problem ids")
+    seed.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     seed.add_argument("--source", help="only problems from this source (kernelbench, inference)")
     seed.add_argument("--split", choices=("dev", "eval"))
     seed.add_argument("--max-iters", type=int, default=4, help="attempts per problem")
@@ -133,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     optimize.add_argument("--stage", required=True, choices=sorted(STAGE_PROMPTS))
     optimize.add_argument("--ids", help="comma-separated problem ids")
+    optimize.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     optimize.add_argument("--source", help="only problems from this source")
     optimize.add_argument("--split", choices=("dev", "eval"))
     optimize.add_argument("--max-iters", type=int, default=3, help="candidates per problem")
@@ -148,6 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
         "pipeline", help="analyze, plan and run every stage on corpus problems (stage 5)"
     )
     pipeline.add_argument("--ids", help="comma-separated problem ids")
+    pipeline.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     pipeline.add_argument("--source", help="only problems from this source")
     pipeline.add_argument("--split", choices=("dev", "eval"))
     pipeline.add_argument("--max-iters", type=int, default=2, help="candidates per stage")
@@ -174,6 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
         "claude", help="optimize corpus problems in a headless Claude Code workspace (stage 6)"
     )
     claude.add_argument("--ids", help="comma-separated problem ids")
+    claude.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     claude.add_argument("--source", help="only problems from this source")
     claude.add_argument("--split", choices=("dev", "eval"))
     claude.add_argument(
@@ -193,12 +207,14 @@ def build_parser() -> argparse.ArgumentParser:
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
 
     kb_list = kb_commands.add_parser("list", help="entries with their stage and measured speedup")
+    kb_list.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     kb_list.set_defaults(func=cmd_kb_list)
 
     show = kb_commands.add_parser("show", help="a stage's slice as a prompt receives it")
     show.add_argument("stage", choices=[stage.value for stage in Stage])
     show.add_argument("--families", help="comma-separated corpus families")
     show.add_argument("--budget", type=int, default=TOKEN_BUDGET, help="token budget")
+    show.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     show.set_defaults(func=cmd_kb_show)
 
     verify = kb_commands.add_parser("verify", help="run every entry's kernel pair on the GPU")
@@ -206,6 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--write", action="store_true", help="record example speedups in measured.yaml"
     )
+    verify.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     verify.set_defaults(func=cmd_kb_verify)
     return parser
 
@@ -379,7 +396,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         replay=args.replay,
     )
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     accepted = 0
@@ -430,7 +447,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
                 "model": config.llm.model,
                 **stamp,
             }
-            upsert([row], STAGES, STAGE_FIELDS, STAGE_KEY)
+            upsert([row], _results(STAGES, args), STAGE_FIELDS, STAGE_KEY)
     print(
         f"accepted {accepted} of {len(problems)}; "
         f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
@@ -463,7 +480,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
         replay=args.replay,
     )
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     improved = 0
@@ -484,7 +501,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     args.max_stages,
                     ncu,
                     memcheck,
-                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
+                    _ledger(config.cache_dir, stamp["gpu"], problem),
                 )
             except BudgetExceeded as e:
                 print(f"stopping: {e}; resume with --from {problem.id}", flush=True)
@@ -529,7 +546,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                         **stamp,
                     }
                 ],
-                PIPELINE,
+                _results(PIPELINE, args),
                 PIPELINE_FIELDS,
                 PIPELINE_KEY,
             )
@@ -550,7 +567,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     }
                     for s in result.stages
                 ],
-                PIPELINE_STAGES,
+                _results(PIPELINE_STAGES, args),
                 STAGE_FIELDS,
                 STAGE_KEY,
                 drop={"problem": problem.id},
@@ -575,7 +592,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
     )
     run = time.strftime("%Y%m%d-%H%M%S")
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     spent = 0.0
@@ -594,7 +611,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                     args.max_trials,
                     args.max_turns,
                     args.budget_usd,
-                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
+                    _ledger(config.cache_dir, stamp["gpu"], problem),
                     ncu,
                     memcheck,
                 )
@@ -637,7 +654,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                         **stamp,
                     }
                 ],
-                CLAUDE,
+                _results(CLAUDE, args),
                 CLAUDE_FIELDS,
                 PIPELINE_KEY,
             )
@@ -668,6 +685,8 @@ def _llm_config(args: argparse.Namespace):
 
 
 def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:
+    """The selected problems, for ``--dsl``'s seed."""
+    problems = [p.for_dsl(_dsl(args)) for p in problems]
     if getattr(args, "ids", None):
         wanted = set(args.ids.split(","))
         problems = [p for p in problems if p.id in wanted]
@@ -679,6 +698,21 @@ def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:
     return problems
 
 
+def _dsl(args: argparse.Namespace) -> Dsl:
+    return Dsl(getattr(args, "dsl", None) or Dsl.TRITON)
+
+
+def _results(path: Path, args: argparse.Namespace) -> Path:
+    """``results/x.csv`` for Triton, ``results/x_cuda.csv`` for CUDA."""
+    dsl = _dsl(args)
+    return path if dsl is Dsl.TRITON else path.with_name(f"{path.stem}_{dsl}{path.suffix}")
+
+
+def _ledger(cache_dir: Path, gpu: str, problem: Problem) -> Path:
+    name = problem.id if problem.dsl is Dsl.TRITON else f"{problem.id}.{problem.dsl}"
+    return ledger_path(cache_dir, gpu, name)
+
+
 def _probe(runner: Runner, name: str) -> ProbeResult:
     try:
         return ProbeResult.model_validate(runner.call("probe", name=name))
@@ -687,7 +721,7 @@ def _probe(runner: Runner, name: str) -> ProbeResult:
 
 
 def cmd_kb_list(args: argparse.Namespace) -> int:
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     for c in kb.constraints:
         stages = ",".join(c.stages) or "all"
         print(f"constraint  {c.id:44s} {stages:30s} {c.check.problem}")
@@ -701,7 +735,7 @@ def cmd_kb_list(args: argparse.Namespace) -> int:
 
 def cmd_kb_show(args: argparse.Namespace) -> int:
     config = get_config()
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     profile = find_profile(config.hardware_dir, config.device)
     if profile is not None:
         kb = kb.for_device(profile)
@@ -711,7 +745,7 @@ def cmd_kb_show(args: argparse.Namespace) -> int:
 
 
 def cmd_kb_verify(args: argparse.Namespace) -> int:
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     wanted = set(args.ids.split(",")) if args.ids else None
     problems = {p.id: p for p in load_problems()}
     dev = set(load_splits().get("dev", []))

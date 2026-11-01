@@ -92,3 +92,18 @@ def test_facts_and_launches(tmp_path):
         assert gemm.shared_bytes > 64 * 1024 and gemm.ctas_per_sm == 1
         (launch,) = runner.launches(cutlass).launches
         assert launch.category is LaunchCategory.CUDA and launch.name.startswith("_ZN7cutlass")
+
+
+@pytest.mark.gpu
+def test_prompt_example_builds(tmp_path):
+    import torch
+    from test_cuda_static import prompt_example
+
+    from smforge.harness.workload import load_module
+
+    path = tmp_path / "example.py"
+    path.write_text(prompt_example())
+    model = load_module(path).Model()
+    for dtype in (torch.float16, torch.bfloat16, torch.float32):
+        x = torch.randn(1000, device="cuda", dtype=dtype)
+        torch.testing.assert_close(model(x), x * 2)

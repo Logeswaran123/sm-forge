@@ -1,8 +1,8 @@
-# Optimize one Triton kernel: $problem
+# Optimize one $language kernel: $problem
 
-`kernel.py` is a correct Triton kernel for the PyTorch reference in `problem/reference.py`.
-Make it faster on $device, Triton $triton, PyTorch $torch, without changing what it computes.
-
+`kernel.py` is a correct $language kernel for the PyTorch reference in `problem/reference.py`.
+Make it faster on $device, $toolchain, PyTorch $torch, without changing what it computes.
+$layout
 ## Rules
 
 - Write files only under `work/`. `problem/`, `kernel.py`, `trials/`, `kb.md`, `stages.md`,
@@ -30,16 +30,15 @@ $issues
 
 `smforge-skill trial save` runs these in order against `t0` and reports the first failure:
 
-1. Static checks and an audit of `forward`: all computation runs in `@triton.jit` kernels;
-   `forward` and its helpers may only allocate tensors and change views, layouts and dtypes.
+1. Static checks and an audit of `forward`: $compute_rule
    `forward` keeps no state between calls (no assignment to `self`), and has no host
    synchronization.
 2. The interface: `Model.__init__` keeps its arguments and creates the same parameters and
    buffers; `get_inputs` and `get_init_inputs` stay as they are.
 3. Correctness against the reference on `ci` (odd sizes) and `bench-gpu`, every autotune config
    included$float32_check.
-4. The launch profile: no cuBLAS, cuDNN, ATen compute or other non-Triton kernel that `t0` does
-   not launch.
+4. The launch profile: no cuBLAS, cuDNN, ATen compute or $foreign that `t0` does not
+   launch.
 5. Interleaved timing on `bench-gpu` against `t0`. A trial is faster only by more than
    $min_effect; within that it is parity.
 
