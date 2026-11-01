@@ -1,7 +1,7 @@
 # sm-forge
 
-Takes a correct Triton kernel and a shape spec, and returns a faster kernel that passes the same
-correctness checks on an NVIDIA GPU. Modeled on [Xe-Forge](https://github.com/IntelLabs/Xe-Forge),
+Takes a correct Triton or CUDA C++ kernel and a shape spec, and returns a faster kernel that
+passes the same correctness checks on an NVIDIA GPU. Modeled on [Xe-Forge](https://github.com/IntelLabs/Xe-Forge),
 which does the same for Intel GPUs. See [PLAN.md](PLAN.md) for the stages.
 
 ## Install
@@ -20,6 +20,9 @@ To reuse an existing environment that already has torch and triton:
 python -m venv --system-site-packages .venv
 .venv/bin/pip install -e ".[dev]"
 ```
+
+CUDA C++ kernels also need nvcc from the CUDA toolkit (12.8 or newer for sm_120), ninja (in the
+`cu128` extra, or `pip install ninja`), a host C++ compiler, and git to fetch CUTLASS.
 
 ## Setup
 
@@ -75,6 +78,26 @@ bench-gpu:
 Tolerances come from the CLI, then the variant (`rtol`, `atol`), then the environment, then a
 default for the variant's dtype.
 
+A CUDA C++ kernel file is the same Python module with the device code and the PyTorch binding
+in two strings, built when the module is imported:
+
+```python
+from smforge.cuda import build
+
+CUDA_SRC = r"""..."""   # kernels and launchers: raw pointers, sizes, a cudaStream_t; no PyTorch headers
+CPP_SRC = r"""..."""    # torch::Tensor functions that unpack, allocate, launch and check
+ext = build(CUDA_SRC, CPP_SRC, ["forward"])
+```
+
+`build` compiles the device code with nvcc alone (`-arch=sm_120a` here) and the binding against
+a precompiled `torch/extension.h`, so a build takes about 5 s instead of 30. Builds are cached
+in `.smforge/cuda/` by source hash; the precompiled header takes about 730 MB there. A compile
+error is reported with its line in the kernel file. A source that includes `cutlass/` gets the
+CUTLASS headers, fetched once with git at v4.8.1 into `.smforge/cutlass/`, or taken from
+`CUTLASS_DIR`. The static checks require a launch-error check after `<<<...>>>` launches and
+reject PyTorch compute in the binding, `cudaMalloc` per call and `static` state;
+`src/smforge/llm/prompts/cuda/format.md` is the layout as the LLM sees it.
+
 ## Commands
 
 ```bash
@@ -119,7 +142,8 @@ smforge-skill trial finalize output.py --dir trials
 ## Corpus
 
 Problems live in `corpus/<source>/<id>/`: `reference.py`, `spec.yaml`, `problem.yaml`, and once
-seeded, `kernel.py` with its `seed.yaml`.
+seeded, `kernel.py` with its `seed.yaml`, or for CUDA C++, `kernel_cuda.py` with
+`seed_cuda.yaml`.
 
 ```bash
 smforge corpus import-kernelbench <KernelBench checkout> --level 2
@@ -127,6 +151,7 @@ smforge corpus split                       # dev / eval, stratified by family; e
 smforge corpus list --split dev
 smforge seed --source inference            # LLM-written seed kernels, verified on the GPU
 smforge seed --backend claude-code         # same, through `claude -p` instead of an API key
+smforge seed --dsl cuda --ids l1_026_gelu  # a CUDA C++ seed
 smforge corpus baselines --modes eager,compile,seed    # writes results/baselines.csv
 python scripts/roofline.py                 # plots/roofline.png
 ```
@@ -177,6 +202,30 @@ Every candidate and every trial also adds a line to the problem's lessons ledger
 `.smforge/lessons/<gpu>/<problem>.md`: what it changed, the check it failed or its speedup. Later
 pipeline runs on the same GPU put the ledger in each stage's prompt.
 
+`--dsl cuda` runs `seed`, `optimize`, `pipeline` and `claude` on the CUDA C++ seeds, with the
+prompts in `src/smforge/llm/prompts/cuda/` and the knowledge base in `knowledge_base/cuda/`.
+Results go to `results/<name>_cuda.csv`, and the lessons ledger is kept apart from Triton's.
+
+## CUTLASS tile search
+
+`smforge tile-search` tunes CUTLASS's SM80 device GEMM (`mma.sync` 16x8x16, multistage
+`cp.async`) for given shapes: threadblock tile, warp tile, stages, raster swizzle and split-K.
+Each round the LLM proposes configs, sees every config's result so far, and proposes again.
+A config is checked against the device limits before it builds, must match PyTorch on an
+odd-sized `ci` shape and on the timed shape, and is then timed. The best config is compared
+with cuBLAS (the reference) and with CUTLASS's default config.
+
+```bash
+smforge tile-search --shapes 4096x4096x4096:row,1024x8192x8192 --rounds 3 --per-round 6
+```
+
+A shape is `MxNxK`, with B stored `[N, K]` (as `nn.Linear`) unless `:row` says `[K, N]`, and
+fp16 unless `:bfloat16`. On sm_120, CUTLASS's SM120 collectives take only fp8, fp6 and fp4, so
+fp16 and bf16 GEMMs run the SM80 kernels. Their default config (128x256x64 tile, 3 stages)
+needs 144 KB of shared memory and does not launch where a block gets 99 KB, so the baseline is
+that tile with as many stages as fit. K and N must be even: `cp.async` copies at least 4 bytes.
+Results go to `results/tilesearch.csv`.
+
 ## Claude Code engine
 
 `smforge claude` gives each problem to a headless Claude Code session in a workspace of its own
@@ -199,7 +248,8 @@ Code 2.1.280 or newer. A session that fails before its first trial stops the run
 
 ## Knowledge base
 
-`knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.
+`knowledge_base/triton/` and `knowledge_base/cuda/` hold the constraints and optimization
+patterns the LLM stages see (`--dsl cuda` for the second).
 Every entry comes with a kernel pair on a dev-split problem. A constraint's `wrong.py` must fail
 the way the entry says (static check, error, mismatch, or slower) and its `correct.py` must pass.
 A pattern's `after.py` must pass the candidate checks and beat `before.py` in an interleaved
@@ -210,6 +260,7 @@ prompts.
 smforge kb list                              # entries, stages, measured speedups
 smforge kb show fusion --families gemm       # a stage's slice as a prompt receives it
 smforge kb verify [--ids a,b] [--write]      # run every pair on this GPU
+smforge kb verify --dsl cuda --write         # the CUDA C++ entries
 pytest runners/test_kb_examples.py           # the same checks as tests
 ```
 
