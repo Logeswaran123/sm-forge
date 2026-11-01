@@ -1,6 +1,6 @@
 [project]
 name = "sm-forge"
-version = "0.6.0"
+version = "0.7.0"
 description = "Multi-stage LLM-driven optimization of Triton kernels for NVIDIA GPUs"
 readme = "README.md"
 license = "Apache-2.0"
