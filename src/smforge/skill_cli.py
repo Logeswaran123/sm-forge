@@ -226,7 +226,7 @@ def cmd_profile(args: argparse.Namespace) -> int:
         names = [
             {args.kernel_name}
             if args.kernel_name
-            else {k.name for k in runner.facts(path, **_workload(args)).kernels}
+            else {k.symbol or k.name for k in runner.facts(path, **_workload(args)).kernels}
             for path in kernels
         ]
     try:

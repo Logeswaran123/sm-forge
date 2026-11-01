@@ -69,3 +69,26 @@ def test_build(tmp_path):
     missing.write_text(text.replace("void linear_relu(int dtype", "void other(int dtype", 1))
     with pytest.raises(BuildError, match="undefined symbol linear_relu"):
         load_module(missing)
+
+
+@pytest.mark.gpu
+def test_facts_and_launches(tmp_path):
+    from smforge.config import Config
+    from smforge.harness.runner import Runner
+    from smforge.models import LaunchCategory
+
+    spec = FIXTURE.parent / "spec.yaml"
+    cutlass = Path(__file__).parent / "kernels" / "cutlass_gemm" / "kernel.py"
+    with Runner(Config(cache_dir=Path(".smforge"))) as runner:
+        (kernel,) = runner.facts(FIXTURE, spec=spec, variant="ci").kernels
+        assert kernel.name == "linear_relu_kernel<__half>" and kernel.block == [16, 16, 1]
+        assert kernel.grid == [13, 8, 1] and kernel.n_regs > 0 and kernel.ctas_per_sm
+        assert kernel.instructions["FFMA"] and kernel.num_stages is None
+        (launch,) = runner.launches(FIXTURE, spec=spec, variant="ci").launches
+        assert launch.category is LaunchCategory.CUDA
+
+        (gemm,) = runner.facts(cutlass).kernels
+        assert gemm.name.startswith("cutlass::Kernel<") and gemm.mma.get("HMMA")
+        assert gemm.shared_bytes > 64 * 1024 and gemm.ctas_per_sm == 1
+        (launch,) = runner.launches(cutlass).launches
+        assert launch.category is LaunchCategory.CUDA and launch.name.startswith("_ZN7cutlass")

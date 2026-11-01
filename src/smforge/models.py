@@ -158,7 +158,7 @@ class KernelFacts(BaseModel):
     grid: list[int]
     ctas: int
     num_warps: int
-    num_stages: int
+    num_stages: int | None = None
     n_regs: int
     n_spills: int
     shared_bytes: int
@@ -167,6 +167,8 @@ class KernelFacts(BaseModel):
     mma: dict[str, int] = Field(default_factory=dict)
     instructions: dict[str, int] = Field(default_factory=dict)
     total_instructions: int = 0
+    block: list[int] | None = None
+    symbol: str | None = None
 
 
 class NcuKernel(BaseModel):

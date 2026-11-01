@@ -15,7 +15,7 @@ from torch import nn
 from triton.runtime.autotuner import Autotuner
 from triton.runtime.errors import OutOfResources
 
-from smforge.harness.launches import triton_names
+from smforge.harness.launches import cuda_extensions, triton_names
 from smforge.harness.workload import Workload, clone, load_module
 from smforge.models import CheckResult, OutputDiff
 
@@ -137,7 +137,7 @@ def oracle_dtype(workload: Workload, module: ModuleType) -> torch.dtype | None:
     picked for a large batch, or a sum over millions of terms, can leave it further off than a
     careful kernel.
     """
-    if workload.dtype == torch.float32 and not triton_names(module):
+    if workload.dtype == torch.float32 and not triton_names(module) and not cuda_extensions(module):
         return torch.float64
     return None
 

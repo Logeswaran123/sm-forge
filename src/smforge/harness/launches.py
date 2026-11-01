@@ -1,7 +1,8 @@
 """The CUDA kernels one forward launches, from the PyTorch profiler (worker side).
 
 A kernel counts as Triton when the module defines it or when Triton's runtime launched it during
-the warm-up call, which also catches kernels defined inside functions.
+the warm-up call, which also catches kernels defined inside functions; it counts as the file's
+CUDA kernel when an extension built with ``smforge.cuda`` contains it.
 
 On WSL2 the profiler stops recording CUDA activity about 40 s after a process first uses it, and
 does not recover. An empty profile therefore raises ``ProfilerUnavailable``, which ends the
@@ -20,7 +21,9 @@ from torch.autograd import DeviceType
 from torch.profiler import ProfilerActivity, profile
 from triton.runtime.jit import JITFunction
 
+from smforge.cuda import loaded
 from smforge.harness.audit import classify_launch
+from smforge.harness.cuda_facts import own_kernels
 from smforge.harness.facts import capture_launches
 from smforge.models import Launch, LaunchProfile
 
@@ -42,11 +45,22 @@ def triton_names(module: ModuleType) -> set[str]:
     return names
 
 
+def cuda_extensions(module: ModuleType) -> list[ModuleType]:
+    """The ``smforge.cuda`` extensions bound to names in ``module``."""
+    libraries = {str(path) for path in loaded().values()}
+    return [
+        value
+        for value in vars(module).values()
+        if isinstance(value, ModuleType) and str(getattr(value, "__file__", "")) in libraries
+    ]
+
+
 def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -> LaunchProfile:
     with capture_launches() as records:
         fn()
         torch.cuda.synchronize()
     names = names | {kernel.name for kernel, _ in records}
+    cuda = set(own_kernels())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with profile(activities=[ProfilerActivity.CUDA]) as prof:
@@ -65,7 +79,7 @@ def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -
         (
             Launch(
                 name=name,
-                category=classify_launch(name, names),
+                category=classify_launch(name, names, cuda),
                 calls=calls / reps,
                 duration_us=total / reps,
             )

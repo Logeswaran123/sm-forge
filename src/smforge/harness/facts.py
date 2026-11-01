@@ -24,6 +24,8 @@ from smforge.models import KernelFacts
 
 INSTRUCTIONS = (
     "FFMA",
+    "FADD",
+    "FMUL",
     "HFMA2",
     "LDGSTS",
     "UTMALDG",

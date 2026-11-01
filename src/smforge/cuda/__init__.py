@@ -140,6 +140,17 @@ def build(cuda: str, cpp: str, functions: Sequence[str], flags: Sequence[str] = 
     return module
 
 
+def function_name(demangled: str) -> str:
+    """``void k<float>(float const*, int)`` -> ``k<float>``: no return type, no parameters."""
+    depth = 0
+    for i, char in enumerate(demangled):
+        depth += char == "<"
+        depth -= char == ">"
+        if char == "(" and depth == 0:
+            return demangled[:i].removeprefix("void ")
+    return demangled.removeprefix("void ")
+
+
 def loaded() -> dict[str, Path]:
     """Extension name to shared library, for every extension built or loaded in this process."""
     return dict(_loaded)

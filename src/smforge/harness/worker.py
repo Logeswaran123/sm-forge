@@ -25,6 +25,7 @@ from smforge.device.probes import PROBES, run_probe
 from smforge.device.query import query_device
 from smforge.device.roofline import measure_roofline
 from smforge.harness.correctness import ReferenceCache, check_kernel
+from smforge.harness.cuda_facts import collect_cuda_facts
 from smforge.harness.facts import collect_facts
 from smforge.harness.launches import profile_launches, triton_names
 from smforge.harness.timing import Timer, graph_callable
@@ -146,7 +147,7 @@ class Session:
         fn()
         sm_count = torch.cuda.get_device_properties(self.device).multi_processor_count
         report = FactsReport(
-            kernels=collect_facts(fn, sm_count),
+            kernels=collect_facts(fn, sm_count) + collect_cuda_facts(fn, sm_count),
             flop=workload.flop,
             bytes_moved=workload.bytes_moved,
         )
