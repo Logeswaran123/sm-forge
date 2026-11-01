@@ -134,6 +134,13 @@ def test_render(tmp_path):
     assert "row_norm" in kb.render(Stage.DEVICE_SPECIFIC)
 
 
+def test_snippet_fence(tmp_path):
+    triton = load_kb(write_kb(tmp_path / "triton")).render_all()
+    cuda = load_kb(write_kb(tmp_path / "cuda")).render_all()
+    assert "  ```python\n" in triton and "```cpp" not in triton
+    assert "  ```cpp\n" in cuda and "```python" not in cuda
+
+
 def test_render_budget(tmp_path):
     kb = load_kb(write_kb(tmp_path))
     full = kb.render(Stage.DEVICE_SPECIFIC)
