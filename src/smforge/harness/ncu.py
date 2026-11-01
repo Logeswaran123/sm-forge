@@ -91,8 +91,8 @@ _SHORT = {
     "Theoretical Occupancy": "theoretical",
     "Achieved Occupancy": "achieved",
     "Block Limit Registers": "block limit by registers",
-    "Block Limit Shared Mem": "by smem",
-    "Block Limit Warps": "by warps",
+    "Block Limit Shared Mem": "block limit by smem",
+    "Block Limit Warps": "block limit by warps",
     "Warp Cycles Per Issued Instruction": "cycles per issued instruction",
     "Avg. Active Threads Per Warp": "active threads per warp",
     "Mem Busy": "busy",
@@ -102,7 +102,8 @@ _SHORT = {
 }
 _PLAIN_UNITS = {"register/thread", "block", "cycle", "warp", "thread"}
 _SCALE = {"n": 1e-9, "u": 1e-6, "m": 1e-3, "": 1.0, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
-_UNIT = re.compile(r"^(n|u|m|K|M|G|T)?(s|second|byte|byte/s|byte/block|bit|Hz|hz)$")
+_UNIT = re.compile(r"^(n|u|m|K|M|G|T)?(s|second|byte|byte/s|byte/second|byte/block|bit|Hz|hz)$")
+MIN_CHANGE = 0.01
 
 
 class NcuError(RuntimeError):
@@ -230,7 +231,8 @@ def render_profile(profile: NcuProfile, rules: int = 4) -> str:
 
 
 def diff_profiles(before: list[NcuProfile], after: list[NcuProfile]) -> str:
-    """Kept metrics that changed, kernel by kernel; kernels pair by name, else by order."""
+    """Kept metrics that changed by ``MIN_CHANGE`` or more, kernel by kernel and section by
+    section; kernels pair by name, else by order."""
     by_name = {p.kernel: p for p in before}
     lines = []
     for i, new in enumerate(after):
@@ -242,15 +244,18 @@ def diff_profiles(before: list[NcuProfile], after: list[NcuProfile]) -> str:
         old_values, new_values = old.values(), new.values()
         changes = []
         for section, names in KEPT.items():
+            rows = []
             for name in names:
                 key = (section, name)
                 if key not in old_values or key not in new_values:
                     continue
                 a, b = old_values[key], new_values[key]
-                if a != b:
-                    changes.append(
-                        f"  {_short(section, name)}: {_value(*a)} -> {_value(*b)}{_change(a, b)}"
+                if _moved(a, b):
+                    rows.append(
+                        f"    {_short(section, name)}: {_value(*a)} -> {_value(*b)}{_change(a, b)}"
                     )
+            if rows:
+                changes += [f"  {_SECTION_LABELS[section]}:", *rows]
         old_rules, new_rules = _hints(old), _hints(new)
         if gone := sorted(old_rules - new_rules):
             changes.append(f"  ncu estimates gone: {', '.join(gone)}")
@@ -269,10 +274,16 @@ def _short(section: str, name: str) -> str:
 
 
 def _value(value: str, unit: str) -> str:
+    """Times in us and bandwidths in GB/s, whatever prefix ncu chose."""
     if unit == "%":
         return f"{value}%"
     if unit in _PLAIN_UNITS:
         return value
+    match = _UNIT.match(unit)
+    if match and match.group(2) in ("s", "second"):
+        return f"{_base(value, unit) * 1e6:.1f} us"
+    if match and match.group(2) in ("byte/s", "byte/second"):
+        return f"{_base(value, unit) / 1e9:.1f} GB/s"
     return f"{value} {unit}".strip()
 
 
@@ -281,6 +292,14 @@ def _base(value: str, unit: str) -> float:
     number = _number(value)
     match = _UNIT.match(unit)
     return number * _SCALE[match.group(1) or ""] if match else number
+
+
+def _moved(a: tuple[str, str], b: tuple[str, str]) -> bool:
+    try:
+        x, y = _base(*a), _base(*b)
+    except ValueError:
+        return a != b
+    return abs(y - x) >= MIN_CHANGE * abs(x) if x else y != 0
 
 
 def _change(a: tuple[str, str], b: tuple[str, str]) -> str:
