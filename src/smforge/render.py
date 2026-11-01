@@ -9,6 +9,7 @@ from smforge.models import (
     DeviceProfile,
     FactsReport,
     LaunchProfile,
+    SanitizerReport,
     Severity,
     Timing,
     ValidationIssue,
@@ -46,6 +47,16 @@ def check(result: CheckResult) -> str:
         if diff.nan or diff.inf:
             line += f", {diff.nan} NaN, {diff.inf} Inf"
         lines.append(line)
+    return "\n".join(lines)
+
+
+def sanitizer(report: SanitizerReport) -> str:
+    if report.ok:
+        return f"{report.tool}: no errors"
+    head = f"{report.errors} errors" if report.errors else "the program failed"
+    lines = [f"{report.tool}: {head}"]
+    lines += [f"  {message}" for message in report.messages]
+    lines += [f"  {line}" for line in (report.detail or "").splitlines()]
     return "\n".join(lines)
 
 

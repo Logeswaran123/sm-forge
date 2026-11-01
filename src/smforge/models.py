@@ -270,6 +270,16 @@ class ToolStatus(BaseModel):
     detail: str = ""
 
 
+class SanitizerReport(BaseModel):
+    """One compute-sanitizer run. ``detail`` says why the program failed without an error."""
+
+    tool: str
+    ok: bool
+    errors: int
+    messages: list[str] = Field(default_factory=list)
+    detail: str | None = None
+
+
 class DeviceProfile(BaseModel):
     device: DeviceInfo
     probes: list[ProbeResult] = Field(default_factory=list)

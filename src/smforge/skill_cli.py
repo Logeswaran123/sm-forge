@@ -4,6 +4,7 @@ validate  static checks and the forward-path audit, no GPU
 check     correctness against an oracle, then the launch audit
 bench     device time, or an interleaved comparison with --baseline
 facts     registers, spills, shared memory, SASS mix and occupancy per launched kernel
+sanitize  compute-sanitizer memcheck, racecheck, initcheck or synccheck
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from smforge.config import get_config
 from smforge.device.profile import find_profile
 from smforge.harness.audit import audit_launches, audit_source
 from smforge.harness.runner import Runner
+from smforge.harness.sanitizer import TOOLS, SanitizerError, sanitize
 from smforge.harness.static import validate_source
 from smforge.models import Severity
 from smforge.spec import DTYPE_BYTES, KernelSpec, load_spec
@@ -67,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--graph", action="store_true", help="replay the forward as a CUDA graph")
 
     command("facts", "per-kernel resources, SASS mix and occupancy", cmd_facts)
+
+    sanitize = command(
+        "sanitize", "compute-sanitizer on a warm-up forward and one more", cmd_sanitize
+    )
+    sanitize.add_argument("--tool", choices=TOOLS, default="memcheck")
     return parser
 
 
@@ -154,6 +161,16 @@ def cmd_facts(args: argparse.Namespace) -> int:
         ridge = profile.roofline.ridge(_dtype(load_spec(args.spec), args))
     print(render.facts(report, ridge))
     return 0
+
+
+def cmd_sanitize(args: argparse.Namespace) -> int:
+    try:
+        report = sanitize(args.kernel, args.tool, args.spec, args.variant)
+    except SanitizerError as e:
+        print(f"compute-sanitizer unavailable: {e}", file=sys.stderr)
+        return 2
+    print(report.model_dump_json(indent=2) if args.json else render.sanitizer(report))
+    return 0 if report.ok else 1
 
 
 def _workload(args: argparse.Namespace) -> dict:

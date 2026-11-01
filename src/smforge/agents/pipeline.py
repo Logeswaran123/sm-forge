@@ -3,8 +3,10 @@
 The seed is measured (timing, facts, launches, ncu) and analyzed, and the planner orders the
 stages the issues route to. Each stage gets the issues routed to it. An accepted stage's output
 becomes the next stage's input and is measured again; fact-backed issues are recomputed from the
-new measurements and the analyzer's issues carry over. At the end the final kernel is compared
-with the seed, and one that is not faster is discarded, so no regression is finalized.
+new measurements and the analyzer's issues carry over. At the end the last accepted kernel runs
+under compute-sanitizer memcheck on ``ci``; one with errors gives way to the stage output before
+it. The first clean one is compared with the seed and kept only if faster, so no regression is
+finalized.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from smforge import render
 from smforge.agents.analyze import (
     TIMED_VARIANT,
     analyze,
@@ -24,13 +27,16 @@ from smforge.agents.analyze import (
 from smforge.agents.optimize import StageResult, optimize_stage
 from smforge.agents.planner import ROUTES, plan
 from smforge.corpus.catalog import Problem
+from smforge.device.tools import tool_status
 from smforge.harness.runner import Runner
+from smforge.harness.sanitizer import SanitizerError, SanitizerUnavailable, sanitize
 from smforge.kb.loader import KnowledgeBase
 from smforge.llm.client import BudgetExceeded, Completer, Usage
-from smforge.models import DeviceProfile, Issue, Stage, Verdict
+from smforge.models import DeviceProfile, Issue, SanitizerReport, Stage, Verdict
 from smforge.spec import load_spec
 
 log = logging.getLogger(__name__)
+SANITIZED_VARIANT = "ci"
 
 
 @dataclass
@@ -45,6 +51,7 @@ class PipelineResult:
     final_us: float
     kernel: Path
     usage: Usage = field(default_factory=Usage)
+    memcheck: list[tuple[Stage, SanitizerReport]] = field(default_factory=list)
 
     @property
     def speedup(self) -> float:
@@ -62,6 +69,7 @@ def run_pipeline(
     keep: int | None = 2,
     max_stages: int | None = None,
     ncu: bool = True,
+    memcheck: bool = True,
 ) -> PipelineResult:
     workdir.mkdir(parents=True, exist_ok=True)
     spec = load_spec(problem.spec)
@@ -117,11 +125,42 @@ def run_pipeline(
             measured = measure(runner, kernel, problem, ncu)
             found = pre_analyze(kernel.read_text(), measured, dtype, profile)
             issues = found + [i for i in issues if i.source == "llm"]
-    if kernel != problem.seed:
-        comparison = runner.compare(problem.seed, kernel, spec=problem.spec, variant=TIMED_VARIANT)
-        result.seed_us, result.final_us = comparison.baseline_us, comparison.candidate_us
+    finalize(result, problem, runner, memcheck)
+    (workdir / "output.py").write_text(result.kernel.read_text())
+    (workdir / "pipeline.json").write_text(json.dumps(_record(result), indent=1))
+    return result
+
+
+def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck: bool) -> None:
+    """Keep the last accepted kernel if it is memcheck-clean and faster than the seed.
+
+    A kernel memcheck flags is passed over for the stage output before it. The first clean one
+    is compared with the seed, and the seed is kept unless it is faster.
+    """
+    spec = load_spec(problem.spec)
+    variant = SANITIZED_VARIANT if SANITIZED_VARIANT in spec.variants else TIMED_VARIANT
+    for stage in reversed([s for s in result.stages if s.accepted]):
+        if memcheck:
+            try:
+                report = sanitize(stage.kernel, "memcheck", problem.spec, variant)
+            except SanitizerError as e:
+                report = SanitizerReport(tool="memcheck", ok=False, errors=0, detail=str(e))
+            if report.detail is not None:
+                status = tool_status("compute-sanitizer")
+                if not status.ok:
+                    raise SanitizerUnavailable(
+                        f"compute-sanitizer stopped working: {status.detail}"
+                    )
+            result.memcheck.append((stage.stage, report))
+            if not report.ok:
+                log.warning("%s: memcheck: %s", problem.id, render.sanitizer(report))
+                continue
+        comparison = runner.compare(
+            problem.seed, stage.kernel, spec=problem.spec, variant=TIMED_VARIANT
+        )
+        result.seed_us = comparison.baseline_us
         if comparison.verdict is Verdict.FASTER:
-            result.kernel = kernel
+            result.kernel, result.final_us = stage.kernel, comparison.candidate_us
         else:
             log.warning(
                 "%s: final kernel is %s than the seed; keeping the seed",
@@ -129,9 +168,16 @@ def run_pipeline(
                 comparison.verdict,
             )
             result.final_us = result.seed_us
-    (workdir / "output.py").write_text(result.kernel.read_text())
-    (workdir / "pipeline.json").write_text(json.dumps(_record(result), indent=1))
-    return result
+        return
+    result.final_us = result.seed_us
+
+
+def memcheck_summary(result: PipelineResult) -> str:
+    """``stage=ok`` or ``stage=N errors`` for each kernel memcheck ran on, in order."""
+    return ",".join(
+        f"{stage}=" + ("ok" if r.ok else f"{r.errors} errors" if r.errors else "failed")
+        for stage, r in result.memcheck
+    )
 
 
 def _record(result: PipelineResult) -> dict:
@@ -153,5 +199,9 @@ def _record(result: PipelineResult) -> dict:
         ],
         "seed_us": result.seed_us,
         "final_us": result.final_us,
+        "memcheck": [
+            {"stage": str(stage), **report.model_dump(mode="json")}
+            for stage, report in result.memcheck
+        ],
         "cost_usd": round(result.usage.cost_usd, 4),
     }

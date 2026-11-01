@@ -5,16 +5,19 @@ import pytest
 from test_optimize import slow
 from test_seed import copy_problem, message
 
-from smforge.agents import analyze
+from smforge.agents import analyze, pipeline
 from smforge.agents.analyze import Measurements, measure, pre_analyze
-from smforge.agents.pipeline import run_pipeline
+from smforge.agents.optimize import StageResult
+from smforge.agents.pipeline import PipelineResult, finalize, memcheck_summary, run_pipeline
 from smforge.agents.planner import ROUTES, order, plan, routed
 from smforge.config import Config, LLMConfig, TimingConfig
+from smforge.device.tools import tool_status
 from smforge.harness.ncu import NcuError, NcuUnavailable
 from smforge.harness.runner import Runner
 from smforge.kb.loader import load_kb
 from smforge.llm.client import LLMClient
 from smforge.models import (
+    Comparison,
     DeviceInfo,
     DeviceProfile,
     FactsReport,
@@ -25,9 +28,11 @@ from smforge.models import (
     LaunchCategory,
     LaunchProfile,
     NcuKernel,
+    SanitizerReport,
     Stage,
     Timing,
     ToolStatus,
+    Verdict,
 )
 
 KERNEL = Path(__file__).parent / "kernels" / "linear_relu" / "kernel.py"
@@ -222,6 +227,44 @@ def test_measure_stops_when_ncu_breaks(monkeypatch, tmp_path):
     assert measure(FakeRunner(), problem.seed, problem, ncu=False).ncu is None
 
 
+def test_finalize_skips_what_memcheck_flags(monkeypatch, tmp_path):
+    problem = copy_problem(tmp_path)
+    first, second = tmp_path / "first.py", tmp_path / "second.py"
+    stages = [
+        StageResult(problem.id, Stage.AUTOTUNING, True, first, 20, 10),
+        StageResult(problem.id, Stage.FUSION, False, first, 10, 10),
+        StageResult(problem.id, Stage.MEMORY_ACCESS, True, second, 10, 5),
+    ]
+    result = PipelineResult(problem.id, "", [], "", [], stages, 20, 20, problem.seed)
+    flagged = SanitizerReport(tool="memcheck", ok=False, errors=3, messages=["Invalid write"])
+    monkeypatch.setattr(
+        pipeline,
+        "sanitize",
+        lambda kernel, *a: (
+            flagged if kernel == second else SanitizerReport(tool="memcheck", ok=True, errors=0)
+        ),
+    )
+
+    class Compare:
+        def compare(self, baseline, candidate, **kw):
+            return Comparison(
+                baseline_us=20,
+                candidate_us=10,
+                speedup=2,
+                verdict=Verdict.FASTER,
+                min_effect=0.02,
+                quantile=0.2,
+                ratios=[2.0],
+            )
+
+    finalize(result, problem, Compare(), memcheck=True)
+    assert result.kernel == first and result.final_us == 10
+    assert memcheck_summary(result) == "memory_access=3 errors,autotuning=ok"
+    result.kernel, result.memcheck = problem.seed, []
+    finalize(result, problem, Compare(), memcheck=False)
+    assert result.kernel == second and result.memcheck == []
+
+
 @pytest.mark.gpu
 def test_run_pipeline(monkeypatch, tmp_path):
     problem = copy_problem(tmp_path)
@@ -242,11 +285,15 @@ def test_run_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(llm, "_send", send)
     config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=40, rounds=4))
     with Runner(config) as runner:
-        result = run_pipeline(problem, runner, llm, load_kb(), None, 2, tmp_path / "w")
+        memcheck = tool_status("compute-sanitizer").ok
+        result = run_pipeline(
+            problem, runner, llm, load_kb(), None, 2, tmp_path / "w", ncu=False, memcheck=memcheck
+        )
     assert Stage.AUTOTUNING in result.plan
     assert any(s.accepted for s in result.stages)
     assert result.kernel.read_text() == good and result.speedup > 1.5
     assert "untuned_config" in requests[0]["messages"][0]["content"]
     record = json.loads((tmp_path / "w" / "pipeline.json").read_text())
     assert record["summary"] == "tiles are too small"
+    assert [m["ok"] for m in record["memcheck"]] == ([True] if memcheck else [])
     assert (tmp_path / "w" / "output.py").read_text() == good

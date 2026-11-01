@@ -13,7 +13,7 @@ from pathlib import Path
 
 from smforge import render
 from smforge.agents.optimize import PROMPTS, optimize_stage
-from smforge.agents.pipeline import run_pipeline
+from smforge.agents.pipeline import memcheck_summary, run_pipeline
 from smforge.agents.seed import seed_problem
 from smforge.config import get_config
 from smforge.corpus.build import import_kernelbench
@@ -41,6 +41,7 @@ from smforge.device.profile import find_profile, load_profile, profile_path, sav
 from smforge.device.tools import check_tools, tool_status
 from smforge.harness.ncu import NcuUnavailable
 from smforge.harness.runner import Runner, WorkerError
+from smforge.harness.sanitizer import SanitizerUnavailable
 from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.llm.claude_code import ClaudeCodeError
@@ -159,6 +160,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--from", dest="start", metavar="ID", help="skip the selected problems before this one"
     )
     pipeline.add_argument("--no-ncu", action="store_true", help="run without Nsight Compute")
+    pipeline.add_argument(
+        "--no-memcheck", action="store_true", help="finalize without compute-sanitizer memcheck"
+    )
     pipeline.set_defaults(func=cmd_pipeline)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
@@ -431,6 +435,16 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                 flush=True,
             )
             ncu = False
+    memcheck = not args.no_memcheck
+    if memcheck:
+        status = tool_status("compute-sanitizer")
+        if not status.ok:
+            print(
+                f"compute-sanitizer unavailable ({status.detail}): "
+                "final kernels are not memchecked",
+                flush=True,
+            )
+            memcheck = False
     run = time.strftime("%Y%m%d-%H%M%S")
     llm = create_client(
         config.llm,
@@ -459,11 +473,12 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     args.keep,
                     args.max_stages,
                     ncu,
+                    memcheck,
                 )
             except BudgetExceeded as e:
                 print(f"stopping: {e}; resume with --from {problem.id}", flush=True)
                 break
-            except (MissingCredentials, ClaudeCodeError, NcuUnavailable) as e:
+            except (MissingCredentials, ClaudeCodeError, NcuUnavailable, SanitizerUnavailable) as e:
                 print(
                     f"{e}\nstopped at {problem.id}; resume with --from {problem.id}",
                     file=sys.stderr,
@@ -496,6 +511,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                         "accepted": ",".join(accepted),
                         "issues": ",".join(sorted({str(i.type) for i in result.issues})),
                         "cost_usd": f"{result.usage.cost_usd:.4f}",
+                        "memcheck": memcheck_summary(result),
                         "model": config.llm.model,
                         **stamp,
                     }

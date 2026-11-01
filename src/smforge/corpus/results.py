@@ -55,6 +55,7 @@ PIPELINE_FIELDS = (
     "accepted",
     "issues",
     "cost_usd",
+    "memcheck",
     "model",
     "gpu",
     "triton",
