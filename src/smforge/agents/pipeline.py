@@ -61,12 +61,13 @@ def run_pipeline(
     workdir: Path,
     keep: int | None = 2,
     max_stages: int | None = None,
+    ncu: bool = True,
 ) -> PipelineResult:
     workdir.mkdir(parents=True, exist_ok=True)
     spec = load_spec(problem.spec)
     dtype = spec.dtype(spec.variant(TIMED_VARIANT))
     kernel = problem.seed
-    measured = measure(runner, kernel, problem)
+    measured = measure(runner, kernel, problem, ncu)
     found = pre_analyze(kernel.read_text(), measured, dtype, profile)
     usage = Usage()
     try:
@@ -113,7 +114,7 @@ def run_pipeline(
         result.usage.add(stage_result.usage)
         if stage_result.accepted:
             kernel = stage_result.kernel
-            measured = measure(runner, kernel, problem)
+            measured = measure(runner, kernel, problem, ncu)
             found = pre_analyze(kernel.read_text(), measured, dtype, profile)
             issues = found + [i for i in issues if i.source == "llm"]
     if kernel != problem.seed:

@@ -133,7 +133,12 @@ kernel is kept only if it beats the seed.
 
 ```bash
 smforge pipeline --split dev --max-iters 3 --budget-usd 100
+smforge pipeline --split dev --from l2_034_convtranspose3d_layernorm_gelu_scaling
 ```
+
+If ncu does not work when the run starts, the run goes on without counters. If it stops working
+partway (counter access withdrawn, say), the run stops and prints the `--from` that resumes it,
+as it does when the LLM backend stops.
 
 Results go to `results/pipeline.csv` (one row per problem) and `results/pipeline_stages.csv`
 (one row per problem and stage).

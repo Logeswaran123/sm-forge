@@ -35,6 +35,10 @@ class NcuError(RuntimeError):
     pass
 
 
+class NcuUnavailable(NcuError):
+    """ncu fails on any program, not only on one kernel: the counters are off, or it is gone."""
+
+
 def profile_ncu(
     kernel: Path, names: set[str], spec: Path | None = None, variant: str | None = None
 ) -> list[NcuKernel]:
@@ -62,7 +66,10 @@ def profile_ncu(
         command += ["--spec", str(spec)]
     if variant is not None:
         command += ["--variant", variant]
-    out = subprocess.run(command, capture_output=True, text=True, timeout=TIMEOUT)
+    try:
+        out = subprocess.run(command, capture_output=True, text=True, timeout=TIMEOUT)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise NcuError(str(e)) from e
     if out.returncode != 0 or "ERR_" in out.stdout:
         detail = (out.stderr or out.stdout).strip().splitlines()
         raise NcuError(detail[-1] if detail else f"ncu exited with {out.returncode}")

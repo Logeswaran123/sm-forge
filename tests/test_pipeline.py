@@ -5,10 +5,12 @@ import pytest
 from test_optimize import slow
 from test_seed import copy_problem, message
 
-from smforge.agents.analyze import Measurements, pre_analyze
+from smforge.agents import analyze
+from smforge.agents.analyze import Measurements, measure, pre_analyze
 from smforge.agents.pipeline import run_pipeline
 from smforge.agents.planner import ROUTES, order, plan, routed
 from smforge.config import Config, LLMConfig, TimingConfig
+from smforge.harness.ncu import NcuError, NcuUnavailable
 from smforge.harness.runner import Runner
 from smforge.kb.loader import load_kb
 from smforge.llm.client import LLMClient
@@ -25,6 +27,7 @@ from smforge.models import (
     NcuKernel,
     Stage,
     Timing,
+    ToolStatus,
 )
 
 KERNEL = Path(__file__).parent / "kernels" / "linear_relu" / "kernel.py"
@@ -185,6 +188,38 @@ def test_pre_analyze(monkeypatch):
         "tl.dot(a, b, acc)", "tl.dot(a, b, acc, input_precision='ieee')"
     )
     assert pre_analyze(tuned, m, "float32", profile) == []
+
+
+class FakeRunner:
+    def facts(self, kernel, **args):
+        return FactsReport(kernels=[facts()])
+
+    def bench(self, kernel, **args):
+        return Timing(
+            time_us=10, quantile=0.2, median_us=10, mean_us=10, min_us=10, max_us=10, samples=1
+        )
+
+    def launches(self, kernel, **args):
+        return LaunchProfile(launches=[], kernel_us=10)
+
+
+def test_measure_stops_when_ncu_breaks(monkeypatch, tmp_path):
+    problem = copy_problem(tmp_path)
+
+    def fail(*args, **kw):
+        raise NcuError("The application returned an error code (9).")
+
+    monkeypatch.setattr(analyze, "profile_ncu", fail)
+    monkeypatch.setattr(analyze, "tool_status", lambda name: ToolStatus(name=name, ok=True))
+    assert measure(FakeRunner(), problem.seed, problem).ncu is None
+    monkeypatch.setattr(
+        analyze,
+        "tool_status",
+        lambda name: ToolStatus(name=name, ok=False, detail="ERR_NVGPUCTRPERM"),
+    )
+    with pytest.raises(NcuUnavailable, match="ERR_NVGPUCTRPERM"):
+        measure(FakeRunner(), problem.seed, problem)
+    assert measure(FakeRunner(), problem.seed, problem, ncu=False).ncu is None
 
 
 @pytest.mark.gpu

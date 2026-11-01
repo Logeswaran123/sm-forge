@@ -38,7 +38,8 @@ from smforge.corpus.results import (
     upsert,
 )
 from smforge.device.profile import find_profile, load_profile, profile_path, save_profile
-from smforge.device.tools import check_tools
+from smforge.device.tools import check_tools, tool_status
+from smforge.harness.ncu import NcuUnavailable
 from smforge.harness.runner import Runner, WorkerError
 from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
@@ -154,6 +155,10 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
     pipeline.add_argument("--record", type=Path, help="append every reply to this JSONL file")
     pipeline.add_argument("--replay", type=Path, help="answer from a recording, without the LLM")
+    pipeline.add_argument(
+        "--from", dest="start", metavar="ID", help="skip the selected problems before this one"
+    )
+    pipeline.add_argument("--no-ncu", action="store_true", help="run without Nsight Compute")
     pipeline.set_defaults(func=cmd_pipeline)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
@@ -410,6 +415,22 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
     if args.effort:
         config.llm.efforts["optimizer"] = args.effort
     problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
+    if args.start:
+        ids = [p.id for p in problems]
+        if args.start not in ids:
+            print(f"--from {args.start}: not among the selected problems", file=sys.stderr)
+            return 2
+        problems = problems[ids.index(args.start) :]
+    ncu = not args.no_ncu
+    if ncu:
+        status = tool_status("ncu")
+        if not status.ok:
+            print(
+                f"ncu unavailable ({status.detail}): running without counters, so "
+                "uncoalesced_access and bank_conflict are not detected",
+                flush=True,
+            )
+            ncu = False
     run = time.strftime("%Y%m%d-%H%M%S")
     llm = create_client(
         config.llm,
@@ -437,12 +458,16 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     workdir,
                     args.keep,
                     args.max_stages,
+                    ncu,
                 )
             except BudgetExceeded as e:
-                print(f"stopping: {e}", flush=True)
+                print(f"stopping: {e}; resume with --from {problem.id}", flush=True)
                 break
-            except (MissingCredentials, ClaudeCodeError) as e:
-                print(e, file=sys.stderr)
+            except (MissingCredentials, ClaudeCodeError, NcuUnavailable) as e:
+                print(
+                    f"{e}\nstopped at {problem.id}; resume with --from {problem.id}",
+                    file=sys.stderr,
+                )
                 return 2
             except (Refused, ReplayMiss) as e:
                 print(f"{problem.id}: {type(e).__name__} {e}", flush=True)

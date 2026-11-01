@@ -18,7 +18,8 @@ from pydantic import BaseModel
 from smforge import render
 from smforge.agents.seed import task_prompt
 from smforge.corpus.catalog import Problem
-from smforge.harness.ncu import NcuError, profile_ncu
+from smforge.device.tools import tool_status
+from smforge.harness.ncu import NcuError, NcuUnavailable, profile_ncu
 from smforge.harness.runner import Runner
 from smforge.harness.source import KernelSource
 from smforge.harness.static import validate_source
@@ -62,15 +63,28 @@ class AnalyzerReply(BaseModel):
     issues: list[AnalyzerIssue]
 
 
-def measure(runner: Runner, kernel: Path, problem: Problem) -> Measurements:
+def measure(runner: Runner, kernel: Path, problem: Problem, ncu: bool = True) -> Measurements:
+    """Timing, facts and launches, and ncu counters when ``ncu``.
+
+    When ncu fails, the tool probe runs once more: if it fails too, ncu is broken for every
+    program (counter access was withdrawn mid-run, say) and NcuUnavailable stops the caller;
+    otherwise only this kernel goes without counters.
+    """
     args = {"spec": problem.spec, "variant": TIMED_VARIANT}
     facts = runner.facts(kernel, **args)
-    try:
-        ncu = profile_ncu(kernel, {k.name for k in facts.kernels}, **args) if facts.kernels else []
-    except (NcuError, OSError) as e:
-        log.warning("ncu unavailable for %s: %s", kernel, e)
-        ncu = None
-    return Measurements(runner.bench(kernel, **args), facts, runner.launches(kernel, **args), ncu)
+    counters = None
+    if ncu:
+        try:
+            names = {k.name for k in facts.kernels}
+            counters = profile_ncu(kernel, names, **args) if names else []
+        except NcuError as e:
+            status = tool_status("ncu")
+            if not status.ok:
+                raise NcuUnavailable(f"ncu stopped working: {status.detail}") from e
+            log.warning("ncu failed on %s: %s", kernel, e)
+    return Measurements(
+        runner.bench(kernel, **args), facts, runner.launches(kernel, **args), counters
+    )
 
 
 def pre_analyze(
