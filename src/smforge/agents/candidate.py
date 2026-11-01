@@ -192,6 +192,11 @@ def check_candidate(
     return Outcome(str(comparison.verdict), text, comparison)
 
 
+def spread(speedups: list[float]) -> float:
+    """How far the fastest of repeated A/B results is above the slowest, as a fraction."""
+    return max(speedups) / min(speedups) - 1 if speedups else 0.0
+
+
 @dataclass
 class Confirmation:
     """A kernel about to be finalized, checked once more against the kernel it replaces.
@@ -199,7 +204,8 @@ class Confirmation:
     memcheck runs on ``ci`` first. The A/B then runs in ``REPEATS`` fresh workers, and the
     slowest result counts: a forward of many short kernels times with the host's launch speed,
     which on a shared desktop GPU drops for seconds at a time, so one A/B can land in a fast
-    window. ``spread`` is how far apart the repeats are.
+    window. ``spread`` is how far apart the repeats are; ``unstable`` means farther than the A/A
+    band, so the kernel's speed depends on when it runs.
     """
 
     memcheck: SanitizerReport | None = None
@@ -211,8 +217,11 @@ class Confirmation:
 
     @property
     def spread(self) -> float:
-        speedups = [c.speedup for c in self.comparisons]
-        return max(speedups) / min(speedups) - 1 if speedups else 0.0
+        return spread([c.speedup for c in self.comparisons])
+
+    @property
+    def unstable(self) -> bool:
+        return self.worst is not None and self.spread > self.worst.min_effect
 
     @property
     def ok(self) -> bool:

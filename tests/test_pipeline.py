@@ -287,6 +287,15 @@ def test_finalize_skips_what_memcheck_or_a_repeat_rejects(monkeypatch, tmp_path)
     assert result.kernel == problem.seed and result.final_us == result.seed_us
 
 
+def test_confirmation_spread():
+    stable = candidate.Confirmation(comparisons=[comparison(x) for x in (1.58, 1.57, 1.56)])
+    assert stable.ok and not stable.unstable
+    shaky = candidate.Confirmation(comparisons=[comparison(x) for x in (1.58, 1.57, 1.28)])
+    assert shaky.ok and shaky.unstable and shaky.worst.speedup == 1.28
+    assert candidate.spread([1.58, 1.28]) == pytest.approx(0.2344, abs=1e-4)
+    assert candidate.spread([]) == 0.0
+
+
 @pytest.mark.gpu
 def test_run_pipeline(monkeypatch, tmp_path):
     problem = copy_problem(tmp_path)

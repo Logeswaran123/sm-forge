@@ -158,6 +158,8 @@ kernel must pass compute-sanitizer memcheck on `ci` and beat the seed in three A
 fresh worker, the slowest counting; one that fails gives way to the stage output before it, and
 the seed is kept when none passes. A forward of many short kernels times with the host's launch
 speed, which on a desktop GPU drops for seconds at a time, so a single A/B can overstate it.
+When the three runs spread more than the A/A band (`BENCHMARK_MIN_EFFECT`), the run logs a
+warning; the `ab` and `ab_spread` columns record them.
 
 ```bash
 smforge pipeline --split dev --max-iters 3 --budget-usd 100

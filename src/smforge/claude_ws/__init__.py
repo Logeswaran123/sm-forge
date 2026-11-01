@@ -341,6 +341,11 @@ def run_claude(
     result.final, result.kernel = final.id, output
     result.trial_speedup, result.ab = final.speedup, [c.speedup for c in check.comparisons]
     result.seed_us, result.final_us = check.worst.baseline_us, check.worst.candidate_us
+    if check.unstable:
+        result.notes.append(
+            f"{final.id}: the A/B runs spread {check.spread:.1%}, beyond the A/A band "
+            f"({check.worst.min_effect:.0%}); the slowest counts"
+        )
     return result
 
 

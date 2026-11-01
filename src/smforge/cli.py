@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from smforge import render
+from smforge.agents.candidate import spread
 from smforge.agents.optimize import PROMPTS, optimize_stage
 from smforge.agents.pipeline import memcheck_summary, run_pipeline
 from smforge.agents.seed import seed_problem
@@ -523,6 +524,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                         "cost_usd": f"{result.usage.cost_usd:.4f}",
                         "memcheck": memcheck_summary(result),
                         "ab": "/".join(f"{x:.3f}" for x in result.ab),
+                        "ab_spread": f"{spread(result.ab):.3f}" if result.ab else "",
                         "model": config.llm.model,
                         **stamp,
                     }
@@ -627,6 +629,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                         "trials": result.trials,
                         "trial_speedup": _fmt(result.trial_speedup),
                         "ab": "/".join(f"{x:.3f}" for x in result.ab),
+                        "ab_spread": f"{spread(result.ab):.3f}" if result.ab else "",
                         "turns": session.turns,
                         "stop": session.stop,
                         "cost_usd": f"{session.cost_usd:.4f}",

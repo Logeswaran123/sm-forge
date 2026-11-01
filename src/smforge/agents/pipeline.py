@@ -164,6 +164,14 @@ def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck:
         if check.ok:
             result.kernel, result.final_us = stage.kernel, check.worst.candidate_us
             result.ab = [c.speedup for c in check.comparisons]
+            if check.unstable:
+                log.warning(
+                    "%s: the %s output's A/B runs spread %.1f%%, beyond the A/A band; the "
+                    "slowest counts",
+                    problem.id,
+                    stage.stage,
+                    100 * check.spread,
+                )
             return
         log.warning("%s: the %s output is not kept: %s", problem.id, stage.stage, check.reason())
     result.final_us = result.seed_us
