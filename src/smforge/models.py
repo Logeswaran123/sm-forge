@@ -106,8 +106,13 @@ class Launch(BaseModel):
 
 
 class LaunchProfile(BaseModel):
+    """Kernels per forward. ``span_us`` runs from the first kernel's start to the last one's end
+    in a forward of its own; ``idle_us`` is the part of it no kernel was running."""
+
     launches: list[Launch]
     kernel_us: float
+    span_us: float | None = None
+    idle_us: float | None = None
 
 
 class Timing(BaseModel):

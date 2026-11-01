@@ -193,6 +193,11 @@ def test_pre_analyze(monkeypatch):
         "tl.dot(a, b, acc)", "tl.dot(a, b, acc, input_precision='ieee')"
     )
     assert pre_analyze(tuned, m, "float32", profile) == []
+    gaps = launches.model_copy(update={"span_us": 61.7, "idle_us": 46.6})
+    two = gaps.model_copy(update={"launches": gaps.launches * 2})
+    issues = pre_analyze(tuned, Measurements(timing, m.facts, two, None), "float32", profile)
+    assert [i.type for i in issues] == [IssueType.LAUNCH_BOUND]
+    assert "idle 46.6 of the 61.7 us" in issues[0].evidence
 
 
 class FakeRunner:

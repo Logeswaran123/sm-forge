@@ -61,7 +61,10 @@ def sanitizer(report: SanitizerReport) -> str:
 
 
 def launches(profile: LaunchProfile) -> str:
-    lines = [f"launches per forward, {profile.kernel_us:.1f} us of kernel time:"]
+    head = f"launches per forward, {profile.kernel_us:.1f} us of kernel time"
+    if profile.span_us is not None and len(profile.launches) > 1:
+        head += f"; {profile.span_us:.1f} us first start to last end, {profile.idle_us:.1f} us idle"
+    lines = [head + ":"]
     for launch in profile.launches:
         lines.append(
             f"  {launch.category:<13}{launch.calls:>4g}x {launch.duration_us:>10.1f} us  "

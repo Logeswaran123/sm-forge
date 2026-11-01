@@ -42,6 +42,7 @@ TIMED_VARIANT = "bench-gpu"
 MIN_BYTES_PER_SECTOR = 24.0
 MAX_CONFLICTS_PER_WAVEFRONT = 0.25
 LAUNCH_BOUND_US = 10.0
+IDLE_SHARE = 0.5
 
 
 @dataclass
@@ -136,7 +137,14 @@ def pre_analyze(
         elif issue.check == "smem_estimate":
             add(IssueType.SMEM_OVER_BUDGET, issue.message, None, "source")
     calls = sum(launch.calls for launch in m.launches.launches)
-    if calls >= 4 and m.launches.kernel_us / calls < LAUNCH_BOUND_US:
+    idle, span = m.launches.idle_us, m.launches.span_us
+    if calls >= 2 and idle and span and idle > IDLE_SHARE * span:
+        add(
+            IssueType.LAUNCH_BOUND,
+            f"{calls:g} launches per forward; the GPU is idle {idle:.1f} of the {span:.1f} us "
+            "from the first kernel's start to the last one's end",
+        )
+    elif calls >= 4 and m.launches.kernel_us / calls < LAUNCH_BOUND_US:
         add(
             IssueType.LAUNCH_BOUND,
             f"{calls:g} launches per forward averaging {m.launches.kernel_us / calls:.1f} us",
