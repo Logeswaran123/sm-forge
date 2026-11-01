@@ -27,6 +27,7 @@ from smforge.harness.audit import audit_launches, audit_source
 from smforge.harness.runner import Runner
 from smforge.harness.sanitizer import TOOLS, SanitizerError, sanitize
 from smforge.harness.static import validate_source
+from smforge.lessons import ledger_path
 from smforge.models import Severity
 from smforge.spec import DTYPE_BYTES, KernelSpec, load_spec
 from smforge.trials import TrialError, TrialTree
@@ -96,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     init = trial_command("init", "measure the baseline and store it as t0", cmd_trial_init)
     init.add_argument("--problem", required=True, help="corpus problem id, or a problem directory")
     init.add_argument("--baseline", type=Path, help="baseline kernel (default: the problem's seed)")
+    init.add_argument("--no-lessons", action="store_true", help="keep no lessons ledger")
     save = trial_command(
         "save", "store a kernel as a trial and check it against t0", cmd_trial_save
     )
@@ -209,8 +211,11 @@ def cmd_sanitize(args: argparse.Namespace) -> int:
 def cmd_trial_init(args: argparse.Namespace) -> int:
     problem = find_problem(args.problem)
     baseline = args.baseline or problem.seed
-    with Runner() as runner:
-        tree = TrialTree.create(args.dir, problem, baseline, runner)
+    config = get_config()
+    with Runner(config) as runner:
+        gpu = runner.call("device")["name"]
+        ledger = None if args.no_lessons else ledger_path(config.cache_dir, gpu, problem.id)
+        tree = TrialTree.create(args.dir, problem, baseline, runner, ledger)
     print(tree.status())
     return 0
 

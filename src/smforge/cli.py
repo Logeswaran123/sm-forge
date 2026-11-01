@@ -44,6 +44,7 @@ from smforge.harness.runner import Runner, WorkerError
 from smforge.harness.sanitizer import SanitizerUnavailable
 from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
+from smforge.lessons import ledger_path
 from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import (
     BudgetExceeded,
@@ -474,6 +475,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     args.max_stages,
                     ncu,
                     memcheck,
+                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
                 )
             except BudgetExceeded as e:
                 print(f"stopping: {e}; resume with --from {problem.id}", flush=True)

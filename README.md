@@ -162,6 +162,10 @@ that resumes it, as it does when the LLM backend stops.
 Results go to `results/pipeline.csv` (one row per problem) and `results/pipeline_stages.csv`
 (one row per problem and stage).
 
+Every candidate and every trial also adds a line to the problem's lessons ledger,
+`.smforge/lessons/<gpu>/<problem>.md`: what it changed, the check it failed or its speedup. Later
+pipeline runs on the same GPU put the ledger in each stage's prompt.
+
 ## Knowledge base
 
 `knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.

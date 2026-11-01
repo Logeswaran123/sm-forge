@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from smforge import render
+from smforge import lessons, render
 from smforge.agents.analyze import (
     TIMED_VARIANT,
     analyze,
@@ -70,8 +70,14 @@ def run_pipeline(
     max_stages: int | None = None,
     ncu: bool = True,
     memcheck: bool = True,
+    ledger: Path | None = None,
 ) -> PipelineResult:
+    """``ledger``, the problem's lessons file on this GPU, is read into each stage's prompt
+    and gets a line for every candidate."""
     workdir.mkdir(parents=True, exist_ok=True)
+    past = lessons.read(ledger)
+    if ledger is not None:
+        lessons.start(ledger, "pipeline")
     spec = load_spec(problem.spec)
     dtype = spec.dtype(spec.variant(TIMED_VARIANT))
     kernel = problem.seed
@@ -104,6 +110,8 @@ def run_pipeline(
         notes = f"Analyzer summary: {summary}\n\nIssues for this stage:\n" + issues_text(
             [i for i in issues if ROUTES[i.type] is stage]
         )
+        if past:
+            notes += f"\n\nEarlier runs on this problem and GPU (lessons ledger):\n{past}"
         stage_result = optimize_stage(
             problem,
             stage,
@@ -120,12 +128,22 @@ def run_pipeline(
         )
         result.stages.append(stage_result)
         result.usage.add(stage_result.usage)
+        if ledger is not None:
+            for a in stage_result.attempts:
+                lessons.add(
+                    ledger,
+                    f"{stage} attempt {a.attempt}: {a.outcome}"
+                    f"{lessons.speedup(a.speedup, 'its input')}: {a.summary or a.detail}",
+                )
         if stage_result.accepted:
             kernel = stage_result.kernel
             measured = measure(runner, kernel, problem, ncu)
             found = pre_analyze(kernel.read_text(), measured, dtype, profile)
             issues = found + [i for i in issues if i.source == "llm"]
     finalize(result, problem, runner, memcheck)
+    if ledger is not None:
+        kept = "the seed" if result.kernel == problem.seed else "the last clean accepted kernel"
+        lessons.add(ledger, f"final: {result.speedup:.2f}x over the seed, kept {kept}")
     (workdir / "output.py").write_text(result.kernel.read_text())
     (workdir / "pipeline.json").write_text(json.dumps(_record(result), indent=1))
     return result

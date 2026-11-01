@@ -286,13 +286,29 @@ def test_run_pipeline(monkeypatch, tmp_path):
     config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=40, rounds=4))
     with Runner(config) as runner:
         memcheck = tool_status("compute-sanitizer").ok
+        ledger = tmp_path / "lessons.md"
+        ledger.write_text(
+            "# linear_relu\n\n## earlier\n\n- autotuning attempt 0: slower: 8x8 tiles\n"
+        )
         result = run_pipeline(
-            problem, runner, llm, load_kb(), None, 2, tmp_path / "w", ncu=False, memcheck=memcheck
+            problem,
+            runner,
+            llm,
+            load_kb(),
+            None,
+            2,
+            tmp_path / "w",
+            ncu=False,
+            memcheck=memcheck,
+            ledger=ledger,
         )
     assert Stage.AUTOTUNING in result.plan
     assert any(s.accepted for s in result.stages)
     assert result.kernel.read_text() == good and result.speedup > 1.5
     assert "untuned_config" in requests[0]["messages"][0]["content"]
+    assert "slower: 8x8 tiles" in requests[-1]["messages"][0]["content"]
+    assert "- autotuning attempt 0: accepted" in ledger.read_text()
+    assert "- final: " in ledger.read_text()
     record = json.loads((tmp_path / "w" / "pipeline.json").read_text())
     assert record["summary"] == "tiles are too small"
     assert [m["ok"] for m in record["memcheck"]] == ([True] if memcheck else [])

@@ -18,7 +18,8 @@ def test_trial_tree(tmp_path):
     work.mkdir()
     config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=40, rounds=4))
     with Runner(config) as runner:
-        tree = TrialTree.create(tmp_path / "trials", problem, problem.seed, runner)
+        ledger = tmp_path / "lessons.md"
+        tree = TrialTree.create(tmp_path / "trials", problem, problem.seed, runner, ledger)
         with pytest.raises(TrialError):
             TrialTree.create(tmp_path / "trials", problem, problem.seed, runner)
         (work / "same.py").write_text(slow(good))
@@ -43,6 +44,12 @@ def test_trial_tree(tmp_path):
     clean = SanitizerReport(tool="memcheck", ok=True, errors=0)
     assert tree.finalize(tmp_path / "out.py", lambda path: clean).id == "t3"
     assert (tmp_path / "out.py").read_text() == good
+    entries = [line for line in ledger.read_text().splitlines() if line.startswith("- ")]
+    assert entries[1] == "- t2 (from t1): mismatch: subtract the bias"
+    assert entries[2].startswith("- t3 (from t1): accepted ") and entries[2].endswith(
+        ": 64x64 tiles"
+    )
+    assert entries[-1].startswith("- finalized t3")
     tree.path(tree.trials["t3"]).write_text(good + "\n# edited\n")
     assert tree.best().id == "t1"
     with pytest.raises(TrialError, match="no trial t9"):

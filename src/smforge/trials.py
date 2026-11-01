@@ -22,6 +22,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from smforge import lessons
 from smforge.agents.candidate import TIMED_VARIANT, Base, Outcome, check_candidate, make_base
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
@@ -59,6 +60,7 @@ class TrialState(BaseModel):
     facts: FactsReport
     launches: LaunchProfile
     float32: bool
+    ledger: Path | None = None
     trials: dict[str, Trial] = Field(default_factory=dict)
     final: str | None = None
 
@@ -84,8 +86,15 @@ class TrialTree:
         )
 
     @classmethod
-    def create(cls, root: Path, problem: Problem, baseline: Path, runner: Runner) -> TrialTree:
-        """Measure ``baseline`` and store it as ``t0``."""
+    def create(
+        cls,
+        root: Path,
+        problem: Problem,
+        baseline: Path,
+        runner: Runner,
+        ledger: Path | None = None,
+    ) -> TrialTree:
+        """Measure ``baseline`` and store it as ``t0``; ``ledger`` gets a line per trial."""
         if (root / STATE).exists():
             raise TrialError(f"{root} already holds a trial tree")
         root.mkdir(parents=True, exist_ok=True)
@@ -101,6 +110,7 @@ class TrialTree:
             facts=base.facts,
             launches=base.launches,
             float32=base.float32,
+            ledger=ledger.resolve() if ledger else None,
         )
         state.trials["t0"] = Trial(
             id="t0",
@@ -114,6 +124,8 @@ class TrialTree:
             created=_now(),
         )
         (root / STATE).write_text(state.model_dump_json(indent=1))
+        if ledger is not None:
+            lessons.start(ledger, f"trials, t0 {timing.time_us:.1f} us")
         return cls(root)
 
     @property
@@ -162,6 +174,12 @@ class TrialTree:
         spec = load_spec(self.problem.spec)
         outcome = check_candidate(runner, self.problem, spec, self.base(), self.path(trial))
         self.record(trial, outcome)
+        if self.state.ledger is not None:
+            lessons.add(
+                self.state.ledger,
+                f"{trial.id} (from {trial.parent}): {trial.outcome}"
+                f"{lessons.speedup(trial.speedup, 't0')}: {trial.strategy or trial.detail}",
+            )
         return outcome
 
     def rank(self, trial: Trial) -> tuple[float, float] | None:
@@ -197,6 +215,10 @@ class TrialTree:
             shutil.copyfile(self.path(trial), output)
             self.state.final = trial.id
             self.write()
+            if self.state.ledger is not None:
+                lessons.add(
+                    self.state.ledger, f"finalized {trial.id}, {trial.speedup:.2f}x over t0"
+                )
             return trial
         self.write()
         return None
