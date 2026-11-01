@@ -770,13 +770,15 @@ Built in v0.6.0, with these differences from the list above:
   the profiled forward (`--launch-count`, not `--launch-skip`), prints about 30 lines per kernel
   with ncu's whole-kernel estimates, and diffs against `--baseline`. The pipeline's prompts keep
   the counter summary from stage 5; the sections are not added, since each measurement would
-  need one more ncu run. Counter access was withdrawn during this stage, so the parser is tested
-  on the sample reports shipped with Nsight Compute, not on a live run.
-- nsys records the CUDA API calls but no GPU activity on this machine, so the forward timeline
-  comes from the PyTorch profiler instead: each forward is profiled alone, and the launch profile
-  records the time from the first kernel's start to the last one's end and how much of it no
-  kernel ran. `launch_bound` also fires when a multi-kernel forward is idle more than half of that
-  span (l2_077's seed: 46.6 of 61.7 us).
+  need one more ncu run. The parser is tested on the sample reports shipped with Nsight Compute.
+  Counter access was withdrawn for most of this stage; once it came back, `profile` on l2_057's
+  final against its seed took about 10 s. A live run reports `ns` and `byte/s` where the samples
+  have `us` and `Gbyte/s`, so values are printed in us and GB/s whatever the unit.
+- nsys records the CUDA API calls but no GPU activity on this machine, with counter access on or
+  off, so the forward timeline comes from the PyTorch profiler instead: each forward is profiled
+  alone, and the launch profile records the time from the first kernel's start to the last one's
+  end and how much of it no kernel ran. `launch_bound` also fires when a multi-kernel forward is
+  idle more than half of that span (l2_077's seed: 46.6 of 61.7 us).
 - compute-sanitizer: the pipeline runs memcheck on `ci` on the last accepted kernel, and a kernel
   with errors gives way to the stage output before it (`results/pipeline.csv` gains a `memcheck`
   column). A candidate that crashes or mismatches gets memcheck's, else racecheck's, findings in
