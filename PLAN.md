@@ -280,8 +280,8 @@ sm-forge/
       timing.py               # events, L2 flush, quantile, interleaved A/B, verdict
       launches.py             # kernels one forward launches, from the profiler
       facts.py                # regs, spills, smem, SASS mix, occupancy, waves
-      ncu.py                  # stage 6: ncu / nsys runners and parsers
-      sanitizer.py            # stage 6: compute-sanitizer wrapper
+      ncu.py                  # ncu counters, section profiles and diffs
+      sanitizer.py            # compute-sanitizer wrapper
     kb/
       schema.py               # constraints, patterns, examples, measurements
       loader.py               # arch and probe filter, stage slices, token budget
@@ -751,6 +751,89 @@ these convs with FFMA and are exact in float32. Accumulation is float32 in all 9
 
 Exit: the Claude Code engine optimizes a dev kernel unattended and finalizes a winner. The pipeline
 harness re-measures that winner within the A/A band.
+
+Built in v0.6.0, with these differences from the list above:
+
+- The float32 check runs `ci` with the declared float32 inputs, float32 tolerances and a float64
+  oracle, and applies only when the kernel a candidate replaces passes it. On the 84 dev problems
+  with float32 inputs, 43 seeds pass and 41 fail. All 41 call `tl.dot` without
+  `input_precision`, so TF32, and 8 of them also cast to float16 or bfloat16; a hard gate would
+  reject them. 10 of the stage 5 finals fail it where their seed passes (on the upstream shapes
+  the count was 9). The candidate checks moved to
+  `agents/candidate.py`, shared by the stage loop and the trial tree.
+- Trial tree (`trials.py`, `smforge-skill trial init|save|status|best|finalize`): `trial save`
+  stores the kernel and checks it against `t0` at once, A/B timing included, so every result is
+  measured and none can be reported by hand; Xe-Forge also accepts reported numbers. A trial
+  whose file changed after its check does not rank. `finalize` takes only a trial faster than
+  `t0` (Xe-Forge also finalizes parity) and runs memcheck on it, moving to the next on errors.
+- ncu: `smforge-skill profile` runs the six sections on the first launch of each Triton kernel in
+  the profiled forward (`--launch-count`, not `--launch-skip`), prints about 30 lines per kernel
+  with ncu's whole-kernel estimates, and diffs against `--baseline`. The pipeline's prompts keep
+  the counter summary from stage 5; the sections are not added, since each measurement would
+  need one more ncu run. Counter access was withdrawn during this stage, so the parser is tested
+  on the sample reports shipped with Nsight Compute, not on a live run.
+- nsys records the CUDA API calls but no GPU activity on this machine, so the forward timeline
+  comes from the PyTorch profiler instead: each forward is profiled alone, and the launch profile
+  records the time from the first kernel's start to the last one's end and how much of it no
+  kernel ran. `launch_bound` also fires when a multi-kernel forward is idle more than half of that
+  span (l2_077's seed: 46.6 of 61.7 us).
+- compute-sanitizer: the pipeline runs memcheck on `ci` on the last accepted kernel, and a kernel
+  with errors gives way to the stage output before it (`results/pipeline.csv` gains a `memcheck`
+  column). A candidate that crashes or mismatches gets memcheck's, else racecheck's, findings in
+  its feedback. Nondeterministic mismatches are not told apart from others.
+- Finalizing (pipeline, trial tree, Claude Code engine) runs memcheck and then the A/B against
+  the seed in three fresh workers; the slowest run is the result and every run is recorded
+  (`ab` in the result tables). The pipeline tries accepted kernels from the last stage back. A
+  forward of many short kernels times with the host's launch speed, which on this desktop GPU
+  drops for seconds at a time: the first exit-run winner on l1_035_groupnorm, 56 launches per
+  forward against the seed's 3, measured 1.60x in its trial's single A/B, 1.44x to 1.51x in
+  fresh workers, and in about one eager bench in five 1800 to 2650 us against the seed's steady
+  1649 us. Under CUDA graphs it was a steady 1056 us. When the three runs spread more than the
+  A/A band, the run says so (`ab_spread` in the result tables).
+- ncu or compute-sanitizer failing mid-run now stops the run: a failed call reruns the tool
+  probe, and if that fails too the run stops with the `--from` that resumes it. Otherwise only
+  that kernel goes without. `--from` also resumes after the LLM backend stops.
+- Claude Code engine (`claude_ws/`, `smforge claude`): `claude -p /optimize-kernel` with
+  `--max-turns`, `--max-budget-usd`, `--permission-mode dontAsk`, the tools Bash, Read, Edit,
+  Write, Glob and Grep, and permission rules allowing writes only under `work/` and Bash only for
+  `smforge-skill` commands other than `trial init` and `trial finalize`. The rules go through
+  `--settings`: Claude Code ignores allow rules in the project settings of a directory nobody has
+  trusted. It still runs read-only shell commands (`ls`, `cat`) on its own. Auto memory is off.
+  The workspace also holds `stages.md` (each stage's instructions) and `lessons.md`. sm-forge
+  finalizes the trial tree itself and checks the winner again in its own worker. The Agent SDK
+  is not used.
+- Lessons ledger (`lessons.py`): `.smforge/lessons/<gpu>/<problem>.md`, a section per run and a
+  line per candidate or trial; the optimizer now starts each reply with one sentence on what it
+  changed, which is the line's text. The pipeline puts the last 40 lines in each stage's prompt.
+
+Result (2026-10-31): `smforge claude` with Claude Code 2.1.314, Opus 5.5 at effort medium, up to 8
+trials and 80 turns. ncu counter access was off throughout, so `t0` had no counters and no
+session called `profile`.
+
+| Problem | Trials | Turns | Cost | Finalized | Trial A/B | Final A/B runs | Recorded |
+|---|---|---|---|---|---|---|---|
+| l1_035_groupnorm, run 2 | 1 | 19 | $0.55 | t1 | 1.599x | 1.499x (one run; before the three-run finalize) | 1.50x |
+| l1_035_groupnorm, run 3 | 1 | 33 | $0.73 | seed kept | 1.58x | 0.612x | 1.00x |
+| l1_035_groupnorm, run 4 | 5 | 30 | $0.87 | t3 | 1.590x | 1.579, 1.573, 1.275x | 1.28x |
+| l2_057_conv2d_relu_hardswish | 3 | 18 | $0.59 | t1 | 1.294x | 1.294, 1.294, 1.294x | 1.29x |
+
+Run 1 failed at its first API call (Claude Code 2.1.220 does not support Opus 5.5) and was
+recorded as a normal finish; a session that fails before its first trial now stops the run.
+
+The exit criterion holds on l2_057: one launch per forward, and the three fresh-worker runs match
+the trial's A/B to within 0.05%. The stage 5 pipeline reached 1.25x on it. It does not hold on
+l1_035. Every winner there splits the forward into L2-sized slices, 29 to 56 launches against the
+seed's 3, and its time follows the host's launch speed: run 4's t3 (56 launches) spread 24%
+across its three runs, twelve times the band. The slowest run is recorded and the spread flagged.
+Finalize stops at the best trial that passes, so run 4's t4 (29 launches, 1.540x in its trial)
+was not tried. Runs 2 and 3 timed variants with `bench` and saved one trial each; after the
+prompts described the three-run final check, run 4 measured everything through `trial save`.
+
+The stage 5 finals, re-measured the same way: 78 of the 80 that differ from the seed launch at
+most 6 kernels per forward. Of the other two, l2_047_conv3d_mish_tanh (17 launches) measured
+3.90, 3.92 and 3.92x against the 3.71x recorded. l1_035_groupnorm (29 launches) recorded 1.54x
+and measured 1.53, 0.86 and 1.51x, so the three-run finalize would not keep it.
+`results/pipeline.csv` still holds the stage 5 numbers.
 
 ### Stage 7: CUDA C++ and CUTLASS tile search
 
