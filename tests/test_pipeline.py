@@ -5,7 +5,7 @@ import pytest
 from test_optimize import slow
 from test_seed import copy_problem, message
 
-from smforge.agents import analyze, pipeline
+from smforge.agents import analyze, candidate
 from smforge.agents.analyze import Measurements, measure, pre_analyze
 from smforge.agents.optimize import StageResult
 from smforge.agents.pipeline import PipelineResult, finalize, memcheck_summary, run_pipeline
@@ -232,7 +232,34 @@ def test_measure_stops_when_ncu_breaks(monkeypatch, tmp_path):
     assert measure(FakeRunner(), problem.seed, problem, ncu=False).ncu is None
 
 
-def test_finalize_skips_what_memcheck_flags(monkeypatch, tmp_path):
+def comparison(speedup: float) -> Comparison:
+    verdict = Verdict.FASTER if speedup > 1.02 else Verdict.PARITY
+    return Comparison(
+        baseline_us=20,
+        candidate_us=20 / speedup,
+        speedup=speedup,
+        verdict=verdict,
+        min_effect=0.02,
+        quantile=0.2,
+        ratios=[speedup],
+    )
+
+
+class Compare:
+    """A runner whose A/B runs return the given speedups in turn."""
+
+    def __init__(self, *speedups: float):
+        self.speedups = list(speedups)
+        self.closed = 0
+
+    def close(self):
+        self.closed += 1
+
+    def compare(self, baseline, candidate, **kw):
+        return comparison(self.speedups.pop(0))
+
+
+def test_finalize_skips_what_memcheck_or_a_repeat_rejects(monkeypatch, tmp_path):
     problem = copy_problem(tmp_path)
     first, second = tmp_path / "first.py", tmp_path / "second.py"
     stages = [
@@ -242,32 +269,22 @@ def test_finalize_skips_what_memcheck_flags(monkeypatch, tmp_path):
     ]
     result = PipelineResult(problem.id, "", [], "", [], stages, 20, 20, problem.seed)
     flagged = SanitizerReport(tool="memcheck", ok=False, errors=3, messages=["Invalid write"])
+    clean = SanitizerReport(tool="memcheck", ok=True, errors=0)
     monkeypatch.setattr(
-        pipeline,
-        "sanitize",
-        lambda kernel, *a: (
-            flagged if kernel == second else SanitizerReport(tool="memcheck", ok=True, errors=0)
-        ),
+        candidate, "sanitize", lambda kernel, *a: flagged if kernel == second else clean
     )
-
-    class Compare:
-        def compare(self, baseline, candidate, **kw):
-            return Comparison(
-                baseline_us=20,
-                candidate_us=10,
-                speedup=2,
-                verdict=Verdict.FASTER,
-                min_effect=0.02,
-                quantile=0.2,
-                ratios=[2.0],
-            )
-
-    finalize(result, problem, Compare(), memcheck=True)
-    assert result.kernel == first and result.final_us == 10
+    runner = Compare(2.1, 1.9, 2.0)
+    finalize(result, problem, runner, memcheck=True)
+    assert result.kernel == first and result.ab == [2.1, 1.9, 2.0]
+    assert result.final_us == pytest.approx(20 / 1.9) and runner.closed == 3
     assert memcheck_summary(result) == "memory_access=3 errors,autotuning=ok"
+
     result.kernel, result.memcheck = problem.seed, []
-    finalize(result, problem, Compare(), memcheck=False)
-    assert result.kernel == second and result.memcheck == []
+    finalize(result, problem, Compare(2.0, 1.01, 1.5, 1.5, 1.5), memcheck=False)
+    assert result.kernel == first and result.ab == [1.5, 1.5, 1.5]
+    result.kernel = problem.seed
+    finalize(result, problem, Compare(1.01, 1.01), memcheck=False)
+    assert result.kernel == problem.seed and result.final_us == result.seed_us
 
 
 @pytest.mark.gpu

@@ -4,7 +4,6 @@ from test_seed import PROBLEM, copy_problem
 
 from smforge.config import Config, TimingConfig
 from smforge.harness.runner import Runner
-from smforge.models import SanitizerReport
 from smforge.trials import TrialError, TrialTree
 
 pytestmark = pytest.mark.gpu
@@ -37,12 +36,11 @@ def test_trial_tree(tmp_path):
     assert [t.id for t in tree.ranked()] == ["t3", "t1"]
     assert "t3: accepted" in tree.status() and "<- best" in tree.status()
 
-    flagged = SanitizerReport(tool="memcheck", ok=False, errors=4)
-    assert tree.finalize(tmp_path / "out.py", lambda path: flagged) is None
-    assert tree.trials["t3"].memcheck == "4 errors"
-    tree.trials["t3"].memcheck = None
-    clean = SanitizerReport(tool="memcheck", ok=True, errors=0)
-    assert tree.finalize(tmp_path / "out.py", lambda path: clean).id == "t3"
+    assert tree.finalize(tmp_path / "out.py", lambda trial, path: "memcheck: 4 errors") is None
+    assert tree.trials["t3"].final_check == "memcheck: 4 errors"
+    assert "final check: memcheck: 4 errors" in tree.status()
+    assert tree.finalize(tmp_path / "out.py", lambda trial, path: None).id == "t3"
+    assert tree.trials["t3"].final_check == "ok"
     assert (tmp_path / "out.py").read_text() == good
     entries = [line for line in ledger.read_text().splitlines() if line.startswith("- ")]
     assert entries[1] == "- t2 (from t1): mismatch: subtract the bias"

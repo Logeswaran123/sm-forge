@@ -76,8 +76,9 @@ def test_run_claude(monkeypatch, tmp_path):
             memcheck=False,
             ncu=False,
         )
-    assert result.final == "t1" and result.trials == 1
-    assert result.speedup > 1.5 and abs(result.remeasured / result.trial_speedup - 1) < 0.05
+    assert result.final == "t1" and result.trials == 1 and len(result.ab) == 3
+    assert result.speedup == pytest.approx(min(result.ab), rel=1e-3)
+    assert result.speedup > 1.5 and abs(min(result.ab) / result.trial_speedup - 1) < 0.05
     assert (result.workspace / "output.py").read_text() == good
 
 
@@ -88,5 +89,8 @@ def test_session_error_stops_the_run(monkeypatch, tmp_path):
     failed = Session("success", 1, 0.0, "API Error: 400 version 2.1.280 or newer is required", True)
     monkeypatch.setattr(ws, "run_session", lambda *args: failed)
     config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=20, rounds=2))
-    with Runner(config) as runner, pytest.raises(ws.ClaudeSessionError, match="before its first trial"):
+    with (
+        Runner(config) as runner,
+        pytest.raises(ws.ClaudeSessionError, match="before its first trial"),
+    ):
         run_claude(problem, runner, load_kb(), None, config, tmp_path / "ws", 4, 20, ncu=False)

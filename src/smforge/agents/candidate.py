@@ -16,21 +16,31 @@ applies when the base kernel passes.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from smforge import render
 from smforge.agents.seed import CHECK_VARIANTS, check_feedback
 from smforge.corpus.catalog import Problem
+from smforge.device.tools import tool_status
 from smforge.harness.audit import audit_interface, audit_launches, audit_source
 from smforge.harness.runner import Runner, WorkerError
-from smforge.harness.sanitizer import SanitizerError, sanitize
+from smforge.harness.sanitizer import SanitizerError, SanitizerUnavailable, sanitize
 from smforge.harness.static import validate_source
-from smforge.models import CheckResult, Comparison, FactsReport, LaunchProfile, Severity, Verdict
+from smforge.models import (
+    CheckResult,
+    Comparison,
+    FactsReport,
+    LaunchProfile,
+    SanitizerReport,
+    Severity,
+    Verdict,
+)
 from smforge.spec import KernelSpec, load_spec
 
 TIMED_VARIANT = "bench-gpu"
 FLOAT32_VARIANT = "ci"
+REPEATS = 3
 _FAULT = re.compile(
     r"CUDA error|illegal memory|misaligned address|unspecified launch failure|worker exited"
 )
@@ -180,3 +190,74 @@ def check_candidate(
         f"Kernel changes from the current kernel:\n{deltas}"
     )
     return Outcome(str(comparison.verdict), text, comparison)
+
+
+@dataclass
+class Confirmation:
+    """A kernel about to be finalized, checked once more against the kernel it replaces.
+
+    memcheck runs on ``ci`` first. The A/B then runs in ``REPEATS`` fresh workers, and the
+    slowest result counts: a forward of many short kernels times with the host's launch speed,
+    which on a shared desktop GPU drops for seconds at a time, so one A/B can land in a fast
+    window. ``spread`` is how far apart the repeats are.
+    """
+
+    memcheck: SanitizerReport | None = None
+    comparisons: list[Comparison] = field(default_factory=list)
+
+    @property
+    def worst(self) -> Comparison | None:
+        return min(self.comparisons, key=lambda c: c.speedup, default=None)
+
+    @property
+    def spread(self) -> float:
+        speedups = [c.speedup for c in self.comparisons]
+        return max(speedups) / min(speedups) - 1 if speedups else 0.0
+
+    @property
+    def ok(self) -> bool:
+        clean = self.memcheck is None or self.memcheck.ok
+        return clean and self.worst is not None and self.worst.verdict is Verdict.FASTER
+
+    def reason(self) -> str:
+        if self.memcheck is not None and not self.memcheck.ok:
+            return render.sanitizer(self.memcheck).replace("\n", "; ")
+        speedups = "/".join(f"{c.speedup:.3f}" for c in self.comparisons)
+        return f"{self.worst.verdict} in one of {len(self.comparisons)} A/B runs ({speedups}x)"
+
+
+def confirm(
+    runner: Runner,
+    problem: Problem,
+    baseline: Path,
+    kernel: Path,
+    memcheck: bool = True,
+    repeats: int = REPEATS,
+) -> Confirmation:
+    """memcheck, then the A/B against ``baseline`` in ``repeats`` fresh workers.
+
+    A memcheck run that fails without finding an error reruns the tool probe, and
+    SanitizerUnavailable is raised when compute-sanitizer no longer works at all.
+    """
+    result = Confirmation()
+    if memcheck:
+        variant = "ci" if "ci" in load_spec(problem.spec).variants else TIMED_VARIANT
+        try:
+            report = sanitize(kernel, "memcheck", problem.spec, variant)
+        except SanitizerError as e:
+            report = SanitizerReport(tool="memcheck", ok=False, errors=0, detail=str(e))
+        if report.detail is not None:
+            status = tool_status("compute-sanitizer")
+            if not status.ok:
+                raise SanitizerUnavailable(f"compute-sanitizer stopped working: {status.detail}")
+        result.memcheck = report
+        if not report.ok:
+            return result
+    for _ in range(repeats):
+        runner.close()
+        result.comparisons.append(
+            runner.compare(baseline, kernel, spec=problem.spec, variant=TIMED_VARIANT)
+        )
+        if result.comparisons[-1].verdict is not Verdict.FASTER:
+            break
+    return result

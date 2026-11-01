@@ -7,9 +7,9 @@ is stored with the sha256 of its source; one whose file has changed since does n
 
 Ranking: correct trials only, by speedup over ``t0``, parity at 1.0; on equal rank the faster
 measured time wins. A trial that failed a check, or whose check never finished, does not rank.
-``finalize`` takes the best trial that is faster than ``t0``, runs memcheck on it when asked, and
-moves to the next one if memcheck finds errors. It refuses parity and regressions: when no trial
-is faster, nothing is finalized.
+``finalize`` takes the best trial that is faster than ``t0`` and passes a final check (memcheck
+and repeated A/B runs, ``smforge.agents.candidate.confirm``), moving to the next when the check
+fails. It refuses parity and regressions: when no trial passes, nothing is finalized.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from smforge import lessons
 from smforge.agents.candidate import TIMED_VARIANT, Base, Outcome, check_candidate, make_base
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
-from smforge.models import FactsReport, LaunchProfile, SanitizerReport
+from smforge.models import FactsReport, LaunchProfile
 from smforge.spec import load_spec
 
 STATE = "trials.json"
@@ -43,7 +43,7 @@ class Trial(BaseModel):
     speedup: float | None = None
     time_us: float | None = None
     baseline_us: float | None = None
-    memcheck: str | None = None
+    final_check: str | None = None
     created: str = ""
 
     @property
@@ -200,19 +200,21 @@ class TrialTree:
         return ranked[0] if ranked else None
 
     def finalize(
-        self, output: Path, memcheck: Callable[[Path], SanitizerReport] | None = None
+        self, output: Path, verify: Callable[[Trial, Path], str | None] | None = None
     ) -> Trial | None:
-        """Copy the best trial faster than ``t0`` that memcheck passes to ``output``."""
+        """Copy the best trial faster than ``t0`` that ``verify`` passes to ``output``.
+
+        ``verify`` returns None for a pass, else the reason, which is kept on the trial.
+        """
         self.state.final = None
         for trial in self.ranked():
             if trial.outcome != "accepted":
                 break
-            if memcheck is not None and trial.memcheck is None:
-                report = memcheck(self.path(trial))
-                trial.memcheck = "ok" if report.ok else f"{report.errors} errors"
+            if verify is not None:
+                trial.final_check = verify(trial, self.path(trial)) or "ok"
                 self.write()
-            if trial.memcheck not in (None, "ok"):
-                continue
+                if trial.final_check != "ok":
+                    continue
             output.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(self.path(trial), output)
             self.state.final = trial.id
@@ -240,8 +242,8 @@ class TrialTree:
             result = trial.outcome or "unchecked"
             if trial.speedup is not None and trial.id != "t0":
                 result += f" {trial.speedup:.2f}x"
-            if trial.memcheck:
-                result += f", memcheck {trial.memcheck}"
+            if trial.final_check:
+                result += f", final check: {trial.final_check[:80]}"
             mark = " <- best" if best and trial_id == best.id else ""
             strategy = f" | {trial.strategy[:70]}" if trial.strategy else ""
             lines.append(

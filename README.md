@@ -105,8 +105,9 @@ the worker, which is restarted for the next request.
 A trial tree keeps every candidate for one problem, with its parent and what the harness
 measured. `t0` is the baseline. `save` stores a kernel and checks it against `t0` at once (the
 checks `smforge optimize` runs, A/B timing included), so no result can be entered by hand.
-`finalize` copies the fastest trial that beats `t0` and passes memcheck; parity and regressions
-are never finalized.
+`finalize` copies the fastest trial that beats `t0` and passes the same final check as the
+pipeline (memcheck, then three A/B runs against `t0`); parity and regressions are never
+finalized.
 
 ```bash
 smforge-skill trial init --problem l1_002_standard_matrix_multiplication --dir trials
@@ -153,8 +154,10 @@ Results go to `results/stages.csv`; candidates, their outcomes and the stage out
 facts, launches, Nsight Compute counters), turns the measurements into fact-backed issues, asks
 the analyzer for the issues the numbers cannot show, and plans the stages those issues route to.
 Each stage gets its issues; after an accepted stage the kernel is measured again. The final
-kernel must pass compute-sanitizer memcheck on `ci` (one that fails gives way to the stage output
-before it) and is kept only if it beats the seed.
+kernel must pass compute-sanitizer memcheck on `ci` and beat the seed in three A/B runs, each in a
+fresh worker, the slowest counting; one that fails gives way to the stage output before it, and
+the seed is kept when none passes. A forward of many short kernels times with the host's launch
+speed, which on a desktop GPU drops for seconds at a time, so a single A/B can overstate it.
 
 ```bash
 smforge pipeline --split dev --max-iters 3 --budget-usd 100
@@ -181,15 +184,16 @@ knowledge base filtered for the GPU, the stage instructions, the problem's lesso
 `/optimize-kernel` command. The session may write only under `work/` and run only
 `smforge-skill`; it saves each candidate with `smforge-skill trial save`, which checks and times
 it against `t0`. When it stops (or reaches `--max-turns`), sm-forge finalizes the trial tree
-itself, memcheck included, and checks the winner again in its own worker against the corpus
-reference.
+itself: the best trial is checked again in its own worker against the corpus reference, then
+goes through memcheck and three A/B runs against the seed.
 
 ```bash
 smforge claude --ids l1_035_groupnorm --max-trials 8 --max-turns 80 --budget-usd 10
 ```
 
-It uses `claude` on `PATH` or `CLAUDE_BIN`, logged in. Results go to `results/claude.csv`; the
-session's transcript stays in the workspace as `transcript.jsonl`.
+It uses `claude` on `PATH` or `CLAUDE_BIN` (or `--claude-bin`), logged in; Opus 5.5 needs Claude
+Code 2.1.280 or newer. A session that fails before its first trial stops the run. Results go to
+`results/claude.csv`; the session's transcript stays in the workspace as `transcript.jsonl`.
 
 ## Knowledge base
 

@@ -8,8 +8,9 @@ problem's lessons ledger, a ``CLAUDE.md`` with the rules and the measurements of
 ``smforge-skill trial save``, which checks and times each one against ``t0``.
 
 ``run_claude`` runs the session with a turn cap, then finalizes the trial tree itself (the
-session's claims are not used) and checks the winner again with the pipeline's candidate checks
-in this process's worker, against the corpus copy of the reference and spec.
+session's claims are not used): the best trial is checked again with the pipeline's candidate
+checks in this process's worker, against the corpus copy of the reference and spec, then
+confirmed (memcheck, and the A/B against the seed in fresh workers, the slowest counting).
 """
 
 from __future__ import annotations
@@ -34,13 +35,18 @@ from smforge.agents.analyze import (
     measurements_text,
     pre_analyze,
 )
-from smforge.agents.candidate import check_candidate, float32_note, make_base
+from smforge.agents.candidate import (
+    Confirmation,
+    check_candidate,
+    confirm,
+    float32_note,
+    make_base,
+)
 from smforge.agents.optimize import PROMPTS
 from smforge.agents.seed import task_prompt
 from smforge.config import Config
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
-from smforge.harness.sanitizer import sanitize
 from smforge.kb.loader import KnowledgeBase
 from smforge.lessons import read as read_lessons
 from smforge.models import DeviceProfile, Stage
@@ -91,7 +97,7 @@ class ClaudeResult:
     seed_us: float
     final_us: float
     trial_speedup: float | None = None
-    remeasured: float | None = None
+    ab: list[float] = field(default_factory=list)
     kernel: Path | None = None
     notes: list[str] = field(default_factory=list)
 
@@ -308,36 +314,33 @@ def run_claude(
     if session.error and len(tree.trials) == 1:
         raise ClaudeSessionError(f"the session failed before its first trial: {session.summary}")
     spec = load_spec(problem.spec)
-    variant = "ci" if "ci" in spec.variants else None
+    base = make_base(runner, problem, problem.seed)
+    checks: dict[str, Confirmation] = {}
 
-    def memcheck_fn(kernel: Path):
-        return sanitize(kernel, "memcheck", problem.spec, variant)
+    def verify(trial, path: Path) -> str | None:
+        """The candidate checks again in this worker, then memcheck and repeated A/B runs."""
+        outcome = check_candidate(runner, problem, spec, base, path)
+        if not outcome.correct:
+            return f"re-check {outcome.kind}: {outcome.feedback.splitlines()[0]}"
+        checks[trial.id] = confirm(runner, problem, problem.seed, path, memcheck)
+        return None if checks[trial.id].ok else checks[trial.id].reason()
 
     output = root / "output.py"
-    final = tree.finalize(output, memcheck_fn if memcheck else None)
+    final = tree.finalize(output, verify)
     t0_us = tree.state.baseline_us
     result = ClaudeResult(problem.id, root, session, len(tree.trials) - 1, None, t0_us, t0_us)
     if session.error:
         result.notes.append(f"the session ended with an error: {session.summary}")
+    for trial in tree.trials.values():
+        if trial.final_check not in (None, "ok"):
+            result.notes.append(f"{trial.id} not finalized: {trial.final_check}")
     if final is None:
         shutil.copyfile(problem.seed, output)
         return result
-    result.trial_speedup = final.speedup
-    outcome = check_candidate(
-        runner, problem, spec, make_base(runner, problem, problem.seed), output
-    )
-    if outcome.comparison is not None:
-        result.remeasured = outcome.comparison.speedup
-    if outcome.kind != "accepted":
-        result.notes.append(f"{final.id} failed the re-check: {outcome.feedback.splitlines()[0]}")
-        log.warning("%s: %s", problem.id, result.notes[-1])
-        shutil.copyfile(problem.seed, output)
-        return result
+    check = checks[final.id]
     result.final, result.kernel = final.id, output
-    result.seed_us, result.final_us = (
-        outcome.comparison.baseline_us,
-        outcome.comparison.candidate_us,
-    )
+    result.trial_speedup, result.ab = final.speedup, [c.speedup for c in check.comparisons]
+    result.seed_us, result.final_us = check.worst.baseline_us, check.worst.candidate_us
     return result
 
 

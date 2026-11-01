@@ -21,6 +21,7 @@ from pathlib import Path
 import yaml
 
 from smforge import render
+from smforge.agents.candidate import confirm
 from smforge.config import get_config
 from smforge.corpus.catalog import Problem, load_problems
 from smforge.device.profile import find_profile
@@ -28,7 +29,7 @@ from smforge.device.tools import find_tool
 from smforge.harness.audit import audit_launches, audit_source
 from smforge.harness.ncu import NcuError, diff_profiles, profile_sections, render_profile
 from smforge.harness.runner import Runner
-from smforge.harness.sanitizer import TOOLS, SanitizerError, sanitize
+from smforge.harness.sanitizer import TOOLS, SanitizerError, SanitizerUnavailable, sanitize
 from smforge.harness.static import validate_source
 from smforge.lessons import ledger_path
 from smforge.models import Severity
@@ -113,7 +114,9 @@ def build_parser() -> argparse.ArgumentParser:
     save.add_argument("--strategy", required=True, help="what this trial changes, in one line")
     trial_command("status", "the tree with each trial's outcome", cmd_trial_status)
     trial_command("best", "the best trial so far", cmd_trial_best)
-    finalize = trial_command("finalize", "copy the best faster trial to a file", cmd_trial_finalize)
+    finalize = trial_command(
+        "finalize", "memcheck and repeated A/B runs, then copy the best trial", cmd_trial_finalize
+    )
     finalize.add_argument("output", type=Path)
     finalize.add_argument("--no-memcheck", action="store_true", help="skip compute-sanitizer")
     return parser
@@ -285,19 +288,20 @@ def cmd_trial_best(args: argparse.Namespace) -> int:
 
 def cmd_trial_finalize(args: argparse.Namespace) -> int:
     tree = TrialTree(args.dir)
-    spec = load_spec(tree.problem.spec)
-    variant = "ci" if "ci" in spec.variants else None
+    t0 = tree.path(tree.trials["t0"])
+    with Runner() as runner:
 
-    def memcheck(kernel: Path):
-        return sanitize(kernel, "memcheck", tree.problem.spec, variant)
+        def verify(trial, path: Path) -> str | None:
+            check = confirm(runner, tree.problem, t0, path, not args.no_memcheck)
+            return None if check.ok else check.reason()
 
-    try:
-        final = tree.finalize(args.output, None if args.no_memcheck else memcheck)
-    except SanitizerError as e:
-        print(f"compute-sanitizer unavailable: {e}; rerun with --no-memcheck", file=sys.stderr)
-        return 2
+        try:
+            final = tree.finalize(args.output, verify)
+        except SanitizerUnavailable as e:
+            print(f"{e}; rerun with --no-memcheck", file=sys.stderr)
+            return 2
     if final is None:
-        print("nothing finalized: no trial is faster than t0 and memcheck-clean")
+        print("nothing finalized: no trial is faster than t0 and passes the final check")
         print(tree.status())
         return 1
     print(f"finalized {final.id}, {final.speedup:.3f}x over t0 -> {args.output}")

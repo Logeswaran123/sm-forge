@@ -522,6 +522,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                         "issues": ",".join(sorted({str(i.type) for i in result.issues})),
                         "cost_usd": f"{result.usage.cost_usd:.4f}",
                         "memcheck": memcheck_summary(result),
+                        "ab": "/".join(f"{x:.3f}" for x in result.ab),
                         "model": config.llm.model,
                         **stamp,
                     }
@@ -608,8 +609,9 @@ def cmd_claude(args: argparse.Namespace) -> int:
                 f"{result.trials} trials, {session.turns} turns, {session.stop}, "
                 f"${session.cost_usd:.2f})"
             )
-            if result.remeasured is not None:
-                line += f"; trial {result.trial_speedup:.3f}x, re-measured {result.remeasured:.3f}x"
+            if result.ab:
+                runs = "/".join(f"{x:.3f}" for x in result.ab)
+                line += f"; trial {result.trial_speedup:.3f}x, re-measured {runs}x"
             print(line, flush=True)
             for note in result.notes:
                 print(f"  {note}", flush=True)
@@ -624,7 +626,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                         "final_trial": result.final or "",
                         "trials": result.trials,
                         "trial_speedup": _fmt(result.trial_speedup),
-                        "remeasured": _fmt(result.remeasured),
+                        "ab": "/".join(f"{x:.3f}" for x in result.ab),
                         "turns": session.turns,
                         "stop": session.stop,
                         "cost_usd": f"{session.cost_usd:.4f}",
