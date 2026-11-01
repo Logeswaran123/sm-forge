@@ -1,0 +1,142 @@
+constraints:
+- id: launch_error_check
+  severity: critical
+  rule: >-
+    Check every kernel launch: call C10_CUDA_KERNEL_LAUNCH_CHECK() in the binding after the
+    launcher returns (or return cudaGetLastError() from it). A launch that fails, from a bad
+    configuration or too many resources, leaves the output as torch::empty found it, and that
+    memory can still hold an earlier correct result.
+  wrong: |
+    gelu(dtype, x.data_ptr(), y.data_ptr(), x.numel(), at::cuda::getCurrentCUDAStream());
+    return y;
+  correct: |
+    gelu(dtype, x.data_ptr(), y.data_ptr(), x.numel(), at::cuda::getCurrentCUDAStream());
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return y;
+  check: {problem: l1_026_gelu, expect: static, match: launch_check}
+
+- id: no_torch_headers_in_cuda_source
+  severity: critical
+  rule: >-
+    CUDA_SRC includes only CUDA and CUTLASS headers. PyTorch's headers add about 20 s to every
+    build; the launchers take raw pointers, sizes and a cudaStream_t, and the binding in
+    CPP_SRC unpacks the tensors.
+  wrong: |
+    CUDA_SRC = r"""
+    #include <ATen/ATen.h>
+    __global__ void k(...) { ... }
+    """
+  correct: |
+    CUDA_SRC = r"""
+    #include <cuda_runtime.h>
+    #include <cuda_fp16.h>
+    void launch(const void* x, void* y, long n, cudaStream_t stream) { ... }
+    """
+  check: {problem: l1_026_gelu, expect: static, match: torch_header}
+
+- id: no_device_malloc_per_call
+  severity: critical
+  rule: >-
+    Do not call cudaMalloc or cudaFree in a launcher: both synchronize the device on every
+    call. Allocate scratch in the binding with torch::empty, which reuses PyTorch's cached
+    memory, and pass the pointer.
+  wrong: |
+    void* scratch;
+    cudaMalloc(&scratch, bytes);
+    kernel<<<grid, block, 0, stream>>>(..., scratch);
+    cudaFree(scratch);
+  correct: |
+    auto scratch = torch::empty({bytes}, x.options().dtype(torch::kUInt8));
+    launch(..., scratch.data_ptr(), at::cuda::getCurrentCUDAStream());
+  check: {problem: l1_026_gelu, expect: static, match: device_alloc}
+
+- id: no_static_state
+  severity: critical
+  rule: >-
+    No static variables in CUDA_SRC or CPP_SRC: a static tensor, pointer or flag keeps state
+    from one call to the next, so a later call can return work done for earlier inputs.
+    Recompute everything on every call.
+  wrong: |
+    static torch::Tensor cached;
+    if (cached.defined()) return cached;
+  correct: |
+    auto y = torch::empty_like(x);
+  check: {problem: l1_026_gelu, expect: static, match: static_state}
+
+- id: accumulate_in_float
+  severity: critical
+  rule: >-
+    Accumulate products and sums in float. Half accumulators (a WMMA accumulator fragment of
+    __half, __hfma2 chains) lose precision over a long K: at K=8192 the result misses the
+    tolerance.
+  wrong: |
+    wmma::fragment<wmma::accumulator, 16, 16, 16, __half> acc;
+  correct: |
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> acc;
+  check: {problem: l1_002_standard_matrix_multiplication, variant: bench-gpu, expect: mismatch}
+
+- id: dynamic_smem_opt_in
+  severity: critical
+  stages: [memory_access, tensor_descriptors, device_specific, autotuning, persistent_kernel]
+  rule: >-
+    A kernel launched with more than 48 KB of dynamic shared memory needs
+    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, bytes) before the
+    launch, up to the device's opt-in limit per block (99 KB on sm_120). Without it the launch
+    fails with "invalid argument".
+  wrong: |
+    kernel<<<grid, 256, 64 * 1024, stream>>>(...);
+  correct: |
+    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 64 * 1024);
+    kernel<<<grid, 256, 64 * 1024, stream>>>(...);
+  check: {problem: l1_026_gelu, expect: error, match: invalid argument}
+
+- id: cutlass_sm120_takes_fp8_and_below
+  severity: critical
+  arch: {min: 120, max: 121}
+  rule: >-
+    On sm_120, CUTLASS's SM120 collective builders (CUTLASS 3.x, cutlass::arch::Sm120) take
+    only fp8, fp6 and fp4 operands, in TN layout. For fp16 and bf16 GEMMs use the SM80 device
+    GEMM (cutlass::gemm::device::Gemm with cutlass::arch::Sm80), which runs mma.sync and
+    cp.async on sm_120.
+  wrong: |
+    CollectiveBuilder<cutlass::arch::Sm120, cutlass::arch::OpClassTensorOp, cutlass::half_t, ...>
+  correct: |
+    cutlass::gemm::device::Gemm<cutlass::half_t, ..., cutlass::arch::OpClassTensorOp,
+                                cutlass::arch::Sm80, ...>
+  check: {problem: l1_002_standard_matrix_multiplication, expect: error, match: F8F6F4}
+
+- id: bounds_check_every_index
+  severity: warning
+  rule: >-
+    Compare every index with the size it runs over before it reads or writes: the grid is
+    rounded up to whole blocks, and the extra threads touch memory past the tensor.
+  wrong: |
+    long i = blockIdx.x * (long)blockDim.x + threadIdx.x;
+    y[i] = f(x[i]);
+  correct: |
+    long i = blockIdx.x * (long)blockDim.x + threadIdx.x;
+    if (i < n) y[i] = f(x[i]);
+  check: {problem: l1_026_gelu, expect: static, match: bounds_check}
+
+- id: launch_bounds_on_kernels
+  severity: warning
+  rule: >-
+    Give each __global__ kernel __launch_bounds__(threads per block), and a minimum of resident
+    blocks when occupancy matters. Without it ptxas does not know the block size: it may use
+    more registers than the block can launch with, and cannot trade registers for occupancy.
+  wrong: |
+    __global__ void gelu_kernel(const T* x, T* y, long n)
+  correct: |
+    __global__ void __launch_bounds__(256) gelu_kernel(const T* x, T* y, long n)
+  check: {problem: l1_026_gelu, expect: static, match: launch_bounds}
+
+- id: launch_on_the_given_stream
+  severity: warning
+  rule: >-
+    Launch on the stream the binding passes from at::cuda::getCurrentCUDAStream(), so the
+    kernels order with PyTorch's work on that stream and can be captured in a CUDA graph.
+  wrong: |
+    kernel<<<grid, block>>>(...);
+  correct: |
+    kernel<<<grid, block, 0, stream>>>(...);
+  check: {problem: l1_026_gelu, expect: static, match: launch_stream}

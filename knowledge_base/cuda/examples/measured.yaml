@@ -1,0 +1,45 @@
+gelu_vectorized_loads:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 2411.52
+  after_us: 1986.4
+  speedup: 1.214
+  triton: 3.6.0
+  cuda: '12.8'
+  date: '2026-11-01'
+gemm_cp_async_pipeline:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 3546.14
+  after_us: 1572.67
+  speedup: 2.255
+  triton: 3.6.0
+  cuda: '12.8'
+  date: '2026-11-01'
+gemm_cutlass_sm80:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 1579.04
+  after_us: 1297.41
+  speedup: 1.217
+  triton: 3.6.0
+  cuda: '12.8'
+  date: '2026-11-01'
+gemm_wmma_tensor_cores:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 8568.96
+  after_us: 4067.07
+  speedup: 2.107
+  triton: 3.6.0
+  cuda: '12.8'
+  date: '2026-11-01'
+linear_smem_padding:
+- gpu: rtx5080
+  variant: bench-gpu
+  before_us: 10136.64
+  after_us: 9333.79
+  speedup: 1.086
+  triton: 3.6.0
+  cuda: '12.8'
+  date: '2026-11-01'

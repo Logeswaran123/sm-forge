@@ -1,0 +1,13 @@
+patterns:
+- id: cp_async_double_buffer
+  stage: tensor_descriptors
+  applies_to: [gemm, matmul, conv2d, conv3d, bmm]
+  summary: >-
+    Fill the next K tile's shared memory with cp.async while the warps multiply the current
+    one: two stages (or more, within the shared-memory budget).
+  how: >-
+    Keep As[2][...] and Bs[2][...]; issue __pipeline_memcpy_async (cuda_pipeline.h) 16 bytes at
+    a time for tile t + 1, __pipeline_commit, then __pipeline_wait_prior(1) and __syncthreads
+    before reading tile t. Out-of-range chunks are zero-filled with an ordinary store. Commit an
+    empty group on the last tile so the wait count stays the same.
+  example: gemm_cp_async_pipeline

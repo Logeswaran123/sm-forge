@@ -106,6 +106,7 @@ def verify_example(
         after_us=round(comparison.candidate_us, 2),
         speedup=round(comparison.speedup, 3),
         triton=device.triton,
+        cuda=device.cuda,
         date=date.today().isoformat(),
     )
     detail = (

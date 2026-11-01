@@ -5,9 +5,10 @@ Errors: a file that launches kernels with ``<<<...>>>`` but never calls ``cudaGe
 output as ``torch.empty`` found it, which can hold an earlier correct result); ``cudaMalloc`` or
 ``cudaFree`` per call (both synchronize the device; allocate with ``torch::empty`` in the
 binding); a ``static`` variable, which keeps state between calls; a PyTorch header in the CUDA
-source. Warnings: a ``__global__`` kernel without ``__launch_bounds__`` (ptxas then sizes
-registers for 1024 threads), or without a comparison against one of its integer parameters (no
-bounds check), a launch on the default stream, and a host synchronization.
+source. Warnings: a ``__global__`` kernel without ``__launch_bounds__`` (ptxas does not know the
+block size, so it may use more registers than a large block can launch with, and cannot trade
+registers for resident blocks), or without a comparison against one of its integer parameters
+(no bounds check), a launch on the default stream, and a host synchronization.
 """
 
 from __future__ import annotations
@@ -99,8 +100,9 @@ def check(src: KernelSource) -> list[ValidationIssue]:
                     issues.append(
                         _issue(
                             "launch_bounds",
-                            f"{kernel.name} has no __launch_bounds__; ptxas assumes 1024 "
-                            "threads per block when it allocates registers",
+                            f"{kernel.name} has no __launch_bounds__; ptxas does not know its "
+                            "block size, so it may use more registers than the block can launch "
+                            "with",
                             line,
                             Severity.WARNING,
                         )

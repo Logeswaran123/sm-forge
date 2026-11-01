@@ -72,6 +72,7 @@ class Measurement(BaseModel):
     after_us: float
     speedup: float
     triton: str
+    cuda: str | None = None
     date: str
 
 

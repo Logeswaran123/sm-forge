@@ -1,0 +1,25 @@
+patterns:
+- id: vectorized_16_byte_access
+  stage: memory_access
+  applies_to: [activation, any]
+  summary: >-
+    Load and store 16 bytes per thread (8 halves or 4 floats) in elementwise kernels, with a
+    scalar loop for the tail.
+  how: >-
+    Reinterpret the pointers as uint4 for the first n / (16 / sizeof(T)) vectors and work on
+    the unpacked elements; a scalar loop from vectors * V handles the rest. Check in the
+    binding that both pointers are 16-byte aligned. A warp then moves 512 bytes per instruction
+    instead of 64.
+  example: gelu_vectorized_loads
+
+- id: pad_transposed_shared_tiles
+  stage: memory_access
+  applies_to: [gemm, matmul, any]
+  summary: >-
+    Pad a shared-memory tile that is written along a column by one element per row, so
+    threads storing consecutive rows of one column fall in different banks.
+  how: >-
+    Declare float tile[TK][TN + 1] instead of [TK][TN]: with 32 banks of 4 bytes, rows TN
+    floats apart map to the same bank whenever TN is a multiple of 32, and 16 threads storing
+    tile[k][n] for k = 0..15 serialize 16 ways. With TN + 1 they spread over the banks.
+  example: linear_smem_padding
