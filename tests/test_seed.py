@@ -7,7 +7,7 @@ import pytest
 import yaml
 from anthropic.types.beta import BetaTextBlock
 
-from smforge.agents.cover import NO_CODE, cover, extract_code
+from smforge.agents.cover import NO_CODE, cover, extract_code, extract_summary
 from smforge.agents.seed import seed_problem, system_prompt, task_prompt
 from smforge.config import Config, LLMConfig, TimingConfig
 from smforge.corpus.catalog import Problem
@@ -47,6 +47,9 @@ def scripted(monkeypatch, llm: LLMClient, replies: list[str]) -> list[dict]:
 def test_extract_code():
     assert extract_code("a\n```python\nx = 1\n```\nb\n```py\ny = 2\n```") == "y = 2\n"
     assert extract_code("no code") is None
+    assert extract_summary("Bigger tiles.\nMore.\n```python\nx = 1\n```") == "Bigger tiles."
+    assert extract_summary("```python\nx = 1\n```\nafter") == "after"
+    assert extract_summary("```python\nx = 1\n```") == ""
 
 
 def test_cover_feeds_failures_back(monkeypatch, tmp_path):

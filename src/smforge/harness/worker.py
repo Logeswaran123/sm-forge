@@ -52,8 +52,15 @@ class Session:
             self._timers[key] = Timer(config, self.device)
         return self._timers[key]
 
-    def workload(self, spec: str | None, variant: str | None, index: int, fallback: str):
-        return Workload.create(self.device, spec, variant, index, fallback)
+    def workload(
+        self,
+        spec: str | None,
+        variant: str | None,
+        index: int,
+        fallback: str,
+        dtype: str | None = None,
+    ):
+        return Workload.create(self.device, spec, variant, index, fallback, dtype)
 
     def runnable(self, kernel: str, workload: Workload, graph: bool = False):
         module = load_module(kernel)
@@ -78,8 +85,9 @@ class Session:
         spec: str | None = None,
         variant: str | None = None,
         index: int = 0,
+        dtype: str | None = None,
     ) -> dict:
-        workload = self.workload(spec, variant, index, oracle)
+        workload = self.workload(spec, variant, index, oracle, dtype)
         result = check_kernel(Path(candidate), Path(oracle), workload, rtol, atol, draws, self.refs)
         return result.model_dump(mode="json")
 

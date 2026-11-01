@@ -4,6 +4,9 @@ validate  static checks and the forward-path audit, no GPU
 check     correctness against an oracle, then the launch audit
 bench     device time, or an interleaved comparison with --baseline
 facts     registers, spills, shared memory, SASS mix and occupancy per launched kernel
+sanitize  compute-sanitizer memcheck, racecheck, initcheck or synccheck
+profile   Nsight Compute sections per kernel, and a diff against a baseline kernel
+trial     the trial tree: init, save (check against t0), status, best, finalize
 """
 
 from __future__ import annotations
@@ -15,20 +18,33 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+import yaml
+
 from smforge import render
+from smforge.agents.candidate import confirm
 from smforge.config import get_config
+from smforge.corpus.catalog import Problem, load_problems
 from smforge.device.profile import find_profile
+from smforge.device.tools import find_tool
 from smforge.harness.audit import audit_launches, audit_source
+from smforge.harness.ncu import NcuError, diff_profiles, profile_sections, render_profile
 from smforge.harness.runner import Runner
+from smforge.harness.sanitizer import TOOLS, SanitizerError, SanitizerUnavailable, sanitize
 from smforge.harness.static import validate_source
+from smforge.lessons import ledger_path
 from smforge.models import Severity
 from smforge.spec import DTYPE_BYTES, KernelSpec, load_spec
+from smforge.trials import TrialError, TrialTree
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    return args.func(args)
+    try:
+        return args.func(args)
+    except TrialError as e:
+        print(e, file=sys.stderr)
+        return 2
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,6 +83,42 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--graph", action="store_true", help="replay the forward as a CUDA graph")
 
     command("facts", "per-kernel resources, SASS mix and occupancy", cmd_facts)
+
+    sanitize = command(
+        "sanitize", "compute-sanitizer on a warm-up forward and one more", cmd_sanitize
+    )
+    sanitize.add_argument("--tool", choices=TOOLS, default="memcheck")
+
+    profile = command("profile", "Nsight Compute sections for one forward's kernels", cmd_profile)
+    profile.add_argument("--baseline", type=Path, help="also profile this kernel and diff")
+    profile.add_argument("--kernel-name", help="only this kernel (default: every Triton kernel)")
+
+    trial = commands.add_parser("trial", help="the trial tree: init, save, status, best, finalize")
+    trial_commands = trial.add_subparsers(dest="trial_command", required=True)
+
+    def trial_command(name: str, help: str, func: Callable[[argparse.Namespace], int]):
+        sub = trial_commands.add_parser(name, help=help)
+        sub.add_argument("--dir", type=Path, default=Path("trials"), help="trial tree directory")
+        sub.set_defaults(func=func)
+        return sub
+
+    init = trial_command("init", "measure the baseline and store it as t0", cmd_trial_init)
+    init.add_argument("--problem", required=True, help="corpus problem id, or a problem directory")
+    init.add_argument("--baseline", type=Path, help="baseline kernel (default: the problem's seed)")
+    init.add_argument("--no-lessons", action="store_true", help="keep no lessons ledger")
+    save = trial_command(
+        "save", "store a kernel as a trial and check it against t0", cmd_trial_save
+    )
+    save.add_argument("kernel", type=Path)
+    save.add_argument("--parent", default="t0", help="the trial this one was derived from")
+    save.add_argument("--strategy", required=True, help="what this trial changes, in one line")
+    trial_command("status", "the tree with each trial's outcome", cmd_trial_status)
+    trial_command("best", "the best trial so far", cmd_trial_best)
+    finalize = trial_command(
+        "finalize", "memcheck and repeated A/B runs, then copy the best trial", cmd_trial_finalize
+    )
+    finalize.add_argument("output", type=Path)
+    finalize.add_argument("--no-memcheck", action="store_true", help="skip compute-sanitizer")
     return parser
 
 
@@ -154,6 +206,122 @@ def cmd_facts(args: argparse.Namespace) -> int:
         ridge = profile.roofline.ridge(_dtype(load_spec(args.spec), args))
     print(render.facts(report, ridge))
     return 0
+
+
+def cmd_sanitize(args: argparse.Namespace) -> int:
+    try:
+        report = sanitize(args.kernel, args.tool, args.spec, args.variant)
+    except SanitizerError as e:
+        print(f"compute-sanitizer unavailable: {e}", file=sys.stderr)
+        return 2
+    print(report.model_dump_json(indent=2) if args.json else render.sanitizer(report))
+    return 0 if report.ok else 1
+
+
+def cmd_profile(args: argparse.Namespace) -> int:
+    """ncu sections for the first launch of each Triton kernel; a diff against ``--baseline``."""
+    kernels = [args.kernel] + ([args.baseline] if args.baseline else [])
+    profiles = []
+    with Runner() as runner:
+        names = [
+            {args.kernel_name}
+            if args.kernel_name
+            else {k.name for k in runner.facts(path, **_workload(args)).kernels}
+            for path in kernels
+        ]
+    try:
+        for path, wanted in zip(kernels, names, strict=True):
+            profiles.append(profile_sections(path, wanted, args.spec, args.variant))
+    except NcuError as e:
+        print(f"ncu failed: {e}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps([[p.model_dump(mode="json") for p in ps] for ps in profiles], indent=2))
+        return 0
+    print("\n\n".join(render_profile(p) for p in profiles[0]))
+    if args.baseline:
+        print(f"\nChanges from {args.baseline}:\n{diff_profiles(profiles[1], profiles[0])}")
+    return 0
+
+
+def cmd_trial_init(args: argparse.Namespace) -> int:
+    problem = find_problem(args.problem)
+    baseline = args.baseline or problem.seed
+    config = get_config()
+    with Runner(config) as runner:
+        gpu = runner.call("device")["name"]
+        ledger = None if args.no_lessons else ledger_path(config.cache_dir, gpu, problem.id)
+        tree = TrialTree.create(args.dir, problem, baseline, runner, ledger)
+    print(tree.status())
+    return 0
+
+
+def cmd_trial_save(args: argparse.Namespace) -> int:
+    tree = TrialTree(args.dir)
+    trial = tree.save(args.kernel, args.parent, args.strategy)
+    with Runner() as runner:
+        outcome = tree.evaluate(trial, runner, find_tool("compute-sanitizer") is not None)
+    head = f"{trial.id} (from {trial.parent}): {outcome.kind}"
+    if trial.speedup is not None:
+        head += (
+            f", {trial.speedup:.3f}x over t0 ({trial.baseline_us:.1f} -> {trial.time_us:.1f} us)"
+        )
+    print(f"{head}\n\n{outcome.feedback}")
+    return 0 if trial.correct else 1
+
+
+def cmd_trial_status(args: argparse.Namespace) -> int:
+    print(TrialTree(args.dir).status())
+    return 0
+
+
+def cmd_trial_best(args: argparse.Namespace) -> int:
+    tree = TrialTree(args.dir)
+    best = tree.best()
+    if best is None:
+        print("no correct trial yet")
+        return 1
+    print(f"{best.id}: {best.outcome}, {best.speedup:.3f}x over t0 | {best.strategy}")
+    print(tree.path(best))
+    return 0
+
+
+def cmd_trial_finalize(args: argparse.Namespace) -> int:
+    tree = TrialTree(args.dir)
+    t0 = tree.path(tree.trials["t0"])
+    with Runner() as runner:
+
+        def verify(trial, path: Path) -> str | None:
+            check = confirm(runner, tree.problem, t0, path, not args.no_memcheck)
+            return None if check.ok else check.reason()
+
+        try:
+            final = tree.finalize(args.output, verify)
+        except SanitizerUnavailable as e:
+            print(f"{e}; rerun with --no-memcheck", file=sys.stderr)
+            return 2
+    if final is None:
+        print("nothing finalized: no trial is faster than t0 and passes the final check")
+        print(tree.status())
+        return 1
+    print(f"finalized {final.id}, {final.speedup:.3f}x over t0 -> {args.output}")
+    return 0
+
+
+def find_problem(name: str) -> Problem:
+    """A corpus problem by id, or a directory with ``reference.py`` and ``spec.yaml``."""
+    path = Path(name)
+    if (path / "spec.yaml").exists():
+        meta = path / "problem.yaml"
+        data = yaml.safe_load(meta.read_text()) if meta.exists() else {}
+        data.setdefault("id", path.resolve().name)
+        data.setdefault("source", "local")
+        data.setdefault("family", "unknown")
+        return Problem(**data, path=path)
+    found = [p for p in load_problems() if p.id == name]
+    if not found:
+        raise SystemExit(f"no problem {name!r} in the corpus, and no spec.yaml in {name}")
+    return found[0]
 
 
 def _workload(args: argparse.Namespace) -> dict:

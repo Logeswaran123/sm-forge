@@ -52,10 +52,11 @@ def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -
         with profile(activities=[ProfilerActivity.CUDA]) as prof:
             for _ in range(reps):
                 fn()
-            torch.cuda.synchronize()
+                torch.cuda.synchronize()
         events = [e for e in prof.events() if e.device_type == DeviceType.CUDA]
     if not events:
         raise ProfilerUnavailable("the profiler recorded no CUDA activity")
+    span, idle = timeline([(e.time_range.start, e.time_range.end) for e in events], reps)
     totals: dict[str, list[float]] = defaultdict(lambda: [0, 0.0])
     for event in events:
         totals[event.name][0] += 1
@@ -72,4 +73,33 @@ def profile_launches(fn: Callable[[], object], names: set[str], reps: int = 3) -
         ),
         key=lambda launch: -launch.duration_us,
     )
-    return LaunchProfile(launches=launches, kernel_us=sum(x.duration_us for x in launches))
+    return LaunchProfile(
+        launches=launches,
+        kernel_us=sum(x.duration_us for x in launches),
+        span_us=span,
+        idle_us=idle,
+    )
+
+
+def timeline(intervals: list[tuple[float, float]], reps: int) -> tuple[float | None, float | None]:
+    """Mean span and idle time of one forward, from ``reps`` forwards run one after another.
+
+    Each forward launches the same number of kernels, so the intervals sorted by start split
+    into ``reps`` equal runs. Kernels may overlap on other streams; idle time counts only the
+    time no kernel was running.
+    """
+    if not intervals or len(intervals) % reps:
+        return None, None
+    ordered = sorted(intervals)
+    size = len(ordered) // reps
+    spans, idles = [], []
+    for i in range(reps):
+        chunk = ordered[i * size : (i + 1) * size]
+        busy, end = 0.0, chunk[0][0]
+        for start, stop in chunk:
+            busy += max(0.0, stop - max(start, end))
+            end = max(end, stop)
+        span = end - chunk[0][0]
+        spans.append(span)
+        idles.append(span - busy)
+    return sum(spans) / reps, sum(idles) / reps

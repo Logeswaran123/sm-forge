@@ -1,9 +1,8 @@
 """One optimization stage on one problem: CoVeR against the stage's input kernel.
 
-A candidate is accepted when it passes the static checks and the source audit, keeps the
-harness interface, matches the reference on ``ci`` and ``bench-gpu``, launches nothing new that is
-not Triton, and beats the input in an interleaved A/B comparison by more than the min-effect band.
-If no candidate is accepted, the input carries forward unchanged. Every candidate is saved with
+A candidate is accepted when it passes the checks in ``smforge.agents.candidate`` and beats the
+input in an interleaved A/B comparison by more than the min-effect band. If no candidate is
+accepted, the input carries forward unchanged. Every candidate is saved with
 its attempt number and the check that rejected it.
 """
 
@@ -14,21 +13,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
 
-from smforge import render
 from smforge.agents.analyze import Measurements, measurements_text
+from smforge.agents.candidate import TIMED_VARIANT, check_candidate, float32_note, make_base
 from smforge.agents.cover import NO_CODE, cover
-from smforge.agents.seed import CHECK_VARIANTS, check_feedback, task_prompt
+from smforge.agents.seed import task_prompt
 from smforge.corpus.catalog import Problem
-from smforge.harness.audit import audit_interface, audit_launches, audit_source
-from smforge.harness.runner import Runner, WorkerError
-from smforge.harness.static import validate_source
+from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
 from smforge.llm.client import Completer, Usage
-from smforge.models import DeviceProfile, Severity, Stage, Verdict
+from smforge.models import DeviceProfile, Stage
 from smforge.spec import load_spec
 
 PROMPTS = Path(__file__).parent.parent / "llm" / "prompts"
-TIMED_VARIANT = "bench-gpu"
 
 
 @dataclass
@@ -37,6 +33,7 @@ class Candidate:
     outcome: str
     detail: str
     speedup: float | None = None
+    summary: str = ""
 
 
 @dataclass
@@ -91,11 +88,11 @@ def optimize_stage(
     keep: int | None = 2,
     notes: str | None = None,
     measured: Measurements | None = None,
+    sanitize_failures: bool = False,
 ) -> StageResult:
     """Run one stage from ``kernel``; ``measured`` reuses measurements of it already taken."""
     spec = load_spec(problem.spec)
     workdir.mkdir(parents=True, exist_ok=True)
-    baseline = kernel.read_text()
     if measured is None:
         args = {"spec": problem.spec, "variant": TIMED_VARIANT}
         measured = Measurements(
@@ -104,12 +101,15 @@ def optimize_stage(
             runner.launches(kernel, **args),
             None,
         )
-    timing, facts, launches = measured.timing, measured.facts, measured.launches
+    timing = measured.timing
+    base = make_base(runner, problem, kernel, measured.facts, measured.launches)
     sections = [
         task_prompt(problem, spec),
-        f"Current kernel (`kernel.py`):\n\n```python\n{baseline.strip()}\n```",
+        f"Current kernel (`kernel.py`):\n\n```python\n{base.code.strip()}\n```",
         measurements_text(measured, spec.dtype(spec.variant(TIMED_VARIANT)), profile),
     ]
+    if note := float32_note(base):
+        sections.append(note)
     if notes:
         sections.append(notes)
     task = "\n\n".join(sections)
@@ -121,57 +121,27 @@ def optimize_stage(
     def verify(code: str, attempt: int) -> tuple[bool, str]:
         path = workdir / f"attempt-{attempt}.py"
         path.write_text(code)
-        outcome, feedback, comparison = _check(path, code)
+        outcome = check_candidate(runner, problem, spec, base, path, sanitize_failures)
+        comparison = outcome.comparison
         speedup = comparison.speedup if comparison else None
-        candidates[attempt] = Candidate(attempt, outcome, feedback.splitlines()[0], speedup)
-        if outcome == "accepted":
+        candidates[attempt] = Candidate(
+            attempt, outcome.kind, outcome.feedback.splitlines()[0], speedup
+        )
+        feedback = outcome.feedback
+        if outcome.kind == "accepted":
             result.accepted, result.kernel = True, path
             result.input_us, result.output_us = comparison.baseline_us, comparison.candidate_us
-        return outcome == "accepted", feedback
-
-    def _check(path: Path, code: str):
-        issues = validate_source(code)
-        if not any(issue.check == "syntax_error" for issue in issues):
-            issues += audit_source(code, spec.audit.allow) + audit_interface(code, baseline)
-        errors = [issue for issue in issues if issue.severity is Severity.ERROR]
-        if errors:
-            kind = "interface" if all(e.check.startswith("interface") for e in errors) else "static"
-            return kind, f"Static checks:\n{render.issues(errors)}", None
-        for name in CHECK_VARIANTS:
-            if name in spec.variants:
-                check = runner.check(path, problem.reference, spec=problem.spec, variant=name)
-                if not check.passed:
-                    kind = "error" if check.error else "mismatch"
-                    return kind, check_feedback(name, check), None
-        try:
-            new_launches = runner.launches(path, spec=problem.spec, variant=TIMED_VARIANT)
-        except WorkerError as e:
-            return "error", f"Launch profile failed: {e}", None
-        audit = [i for i in audit_launches(new_launches, launches) if i.severity is Severity.ERROR]
-        if audit:
-            text = f"Launch audit:\n{render.issues(audit)}\n{render.launches(new_launches)}"
-            return "launch_audit", text, None
-        comparison = runner.compare(kernel, path, spec=problem.spec, variant=TIMED_VARIANT)
-        if comparison.verdict is Verdict.FASTER:
-            return "accepted", f"Accepted: {render.comparison(comparison)}", comparison
-        try:
-            deltas = render.fact_deltas(
-                facts, runner.facts(path, spec=problem.spec, variant=TIMED_VARIANT)
-            )
-        except WorkerError as e:
-            deltas = f"unavailable: {e}"
-        text = (
-            f"Correct but not faster: {render.comparison(comparison)}\n\n"
-            f"Kernel changes from the current kernel:\n{deltas}\n\n"
-            "Try a different configuration and reply with the complete file."
-        )
-        return str(comparison.verdict), text, comparison
+        elif outcome.correct:
+            feedback += "\n\nTry a different configuration and reply with the complete file."
+        return outcome.kind == "accepted", feedback
 
     run = cover(llm, system, task, verify, max_iters, role="optimizer", keep=keep)
     result.usage = run.usage
     result.attempts = [
         candidates.get(i) or Candidate(i, "no_code", NO_CODE) for i in range(len(run.attempts))
     ]
+    for candidate, attempt in zip(result.attempts, run.attempts, strict=True):
+        candidate.summary = attempt.summary
     (workdir / "attempts.json").write_text(
         json.dumps([asdict(a) for a in result.attempts], indent=1)
     )

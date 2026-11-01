@@ -107,6 +107,10 @@ class KernelSpec(BaseModel):
         floats = [d for d in self.input_dtypes(variant) if d in FLOAT_DTYPES]
         return floats[0] if floats else "float32"
 
+    def declared_dtype(self, variant: Variant) -> str:
+        """The dtype of the variant's inputs as ``inputs`` declares them, before any override."""
+        return self.dtype(variant.model_copy(update={"dtype": None}))
+
     def init_args(self, variant: Variant) -> list:
         """``Model.__init__`` arguments. Dim names resolve, also inside lists, which become tuples."""
         return [_init_value(v, variant.dims) for entry in self.inits for v in entry.values()]

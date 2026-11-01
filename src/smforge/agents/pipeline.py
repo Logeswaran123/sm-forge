@@ -3,8 +3,10 @@
 The seed is measured (timing, facts, launches, ncu) and analyzed, and the planner orders the
 stages the issues route to. Each stage gets the issues routed to it. An accepted stage's output
 becomes the next stage's input and is measured again; fact-backed issues are recomputed from the
-new measurements and the analyzer's issues carry over. At the end the final kernel is compared
-with the seed, and one that is not faster is discarded, so no regression is finalized.
+new measurements and the analyzer's issues carry over. At the end the last accepted kernel runs
+under compute-sanitizer memcheck on ``ci`` and is compared with the seed in several fresh
+workers; one that fails either gives way to the stage output before it, and the seed is kept when
+none passes, so no regression is finalized.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from smforge import lessons
 from smforge.agents.analyze import (
     TIMED_VARIANT,
     analyze,
@@ -21,13 +24,14 @@ from smforge.agents.analyze import (
     measure,
     pre_analyze,
 )
+from smforge.agents.candidate import confirm
 from smforge.agents.optimize import StageResult, optimize_stage
 from smforge.agents.planner import ROUTES, plan
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
 from smforge.llm.client import BudgetExceeded, Completer, Usage
-from smforge.models import DeviceProfile, Issue, Stage, Verdict
+from smforge.models import DeviceProfile, Issue, SanitizerReport, Stage
 from smforge.spec import load_spec
 
 log = logging.getLogger(__name__)
@@ -45,6 +49,8 @@ class PipelineResult:
     final_us: float
     kernel: Path
     usage: Usage = field(default_factory=Usage)
+    memcheck: list[tuple[Stage, SanitizerReport]] = field(default_factory=list)
+    ab: list[float] = field(default_factory=list)
 
     @property
     def speedup(self) -> float:
@@ -61,12 +67,20 @@ def run_pipeline(
     workdir: Path,
     keep: int | None = 2,
     max_stages: int | None = None,
+    ncu: bool = True,
+    memcheck: bool = True,
+    ledger: Path | None = None,
 ) -> PipelineResult:
+    """``ledger``, the problem's lessons file on this GPU, is read into each stage's prompt
+    and gets a line for every candidate."""
     workdir.mkdir(parents=True, exist_ok=True)
+    past = lessons.read(ledger)
+    if ledger is not None:
+        lessons.start(ledger, "pipeline")
     spec = load_spec(problem.spec)
     dtype = spec.dtype(spec.variant(TIMED_VARIANT))
     kernel = problem.seed
-    measured = measure(runner, kernel, problem)
+    measured = measure(runner, kernel, problem, ncu)
     found = pre_analyze(kernel.read_text(), measured, dtype, profile)
     usage = Usage()
     try:
@@ -95,6 +109,8 @@ def run_pipeline(
         notes = f"Analyzer summary: {summary}\n\nIssues for this stage:\n" + issues_text(
             [i for i in issues if ROUTES[i.type] is stage]
         )
+        if past:
+            notes += f"\n\nEarlier runs on this problem and GPU (lessons ledger):\n{past}"
         stage_result = optimize_stage(
             problem,
             stage,
@@ -108,29 +124,65 @@ def run_pipeline(
             keep,
             notes,
             measured,
+            memcheck,
         )
         result.stages.append(stage_result)
         result.usage.add(stage_result.usage)
+        if ledger is not None:
+            for a in stage_result.attempts:
+                lessons.add(
+                    ledger,
+                    f"{stage} attempt {a.attempt}: {a.outcome}"
+                    f"{lessons.speedup(a.speedup, 'its input')}: {a.summary or a.detail}",
+                )
         if stage_result.accepted:
             kernel = stage_result.kernel
-            measured = measure(runner, kernel, problem)
+            measured = measure(runner, kernel, problem, ncu)
             found = pre_analyze(kernel.read_text(), measured, dtype, profile)
             issues = found + [i for i in issues if i.source == "llm"]
-    if kernel != problem.seed:
-        comparison = runner.compare(problem.seed, kernel, spec=problem.spec, variant=TIMED_VARIANT)
-        result.seed_us, result.final_us = comparison.baseline_us, comparison.candidate_us
-        if comparison.verdict is Verdict.FASTER:
-            result.kernel = kernel
-        else:
-            log.warning(
-                "%s: final kernel is %s than the seed; keeping the seed",
-                problem.id,
-                comparison.verdict,
-            )
-            result.final_us = result.seed_us
+    finalize(result, problem, runner, memcheck)
+    if ledger is not None:
+        kept = "the seed" if result.kernel == problem.seed else "the last clean accepted kernel"
+        lessons.add(ledger, f"final: {result.speedup:.2f}x over the seed, kept {kept}")
     (workdir / "output.py").write_text(result.kernel.read_text())
     (workdir / "pipeline.json").write_text(json.dumps(_record(result), indent=1))
     return result
+
+
+def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck: bool) -> None:
+    """Keep the last accepted kernel that passes memcheck and beats the seed in every A/B run.
+
+    Accepted kernels are tried from the last stage back (``confirm``: memcheck on ``ci``, then
+    the A/B in fresh workers, the slowest counting). The seed is kept when none passes.
+    """
+    for stage in reversed([s for s in result.stages if s.accepted]):
+        check = confirm(runner, problem, problem.seed, stage.kernel, memcheck)
+        if check.memcheck is not None:
+            result.memcheck.append((stage.stage, check.memcheck))
+        if check.comparisons:
+            result.seed_us = check.worst.baseline_us
+        if check.ok:
+            result.kernel, result.final_us = stage.kernel, check.worst.candidate_us
+            result.ab = [c.speedup for c in check.comparisons]
+            if check.unstable:
+                log.warning(
+                    "%s: the %s output's A/B runs spread %.1f%%, beyond the A/A band; the "
+                    "slowest counts",
+                    problem.id,
+                    stage.stage,
+                    100 * check.spread,
+                )
+            return
+        log.warning("%s: the %s output is not kept: %s", problem.id, stage.stage, check.reason())
+    result.final_us = result.seed_us
+
+
+def memcheck_summary(result: PipelineResult) -> str:
+    """``stage=ok`` or ``stage=N errors`` for each kernel memcheck ran on, in order."""
+    return ",".join(
+        f"{stage}=" + ("ok" if r.ok else f"{r.errors} errors" if r.errors else "failed")
+        for stage, r in result.memcheck
+    )
 
 
 def _record(result: PipelineResult) -> dict:
@@ -152,5 +204,10 @@ def _record(result: PipelineResult) -> dict:
         ],
         "seed_us": result.seed_us,
         "final_us": result.final_us,
+        "ab": [round(x, 4) for x in result.ab],
+        "memcheck": [
+            {"stage": str(stage), **report.model_dump(mode="json")}
+            for stage, report in result.memcheck
+        ],
         "cost_usd": round(result.usage.cost_usd, 4),
     }

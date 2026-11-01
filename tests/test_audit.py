@@ -178,3 +178,12 @@ def test_audit_interface():
     assert checks(audit_interface(shapes, INTERFACE)) == ["interface_inputs"]
     dropped = INTERFACE[: INTERFACE.index("def get_init_inputs")]
     assert checks(audit_interface(dropped, INTERFACE)) == ["interface_inputs"]
+
+
+def test_timeline():
+    from smforge.harness.launches import timeline
+
+    assert timeline([(0, 10), (30, 35), (100, 104)], 2) == (None, None)
+    span, idle = timeline([(0, 10), (30, 35), (100, 104), (110, 120)], 2)
+    assert (span, idle) == ((35 + 20) / 2, (20 + 6) / 2)
+    assert timeline([(0, 10), (5, 12)], 1) == (12, 0)

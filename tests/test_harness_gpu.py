@@ -209,3 +209,15 @@ def test_every_autotune_config_is_checked(runner, tmp_path):
     assert not result.passed
     assert "autotune config of linear_relu_kernel gives wrong output" in result.error
     assert "SCALE: 2" in result.error
+
+
+def test_float32_override(runner, tmp_path):
+    """A float16 variant of float32 inputs, checked at float32: default tl.dot rounds to TF32."""
+    spec = tmp_path / "spec.yaml"
+    spec.write_text(SPEC.read_text().replace("[M, K], dtype: float16", "[M, K], dtype: float32"))
+    assert runner.check(KERNEL, REFERENCE, spec=spec, variant="ci").passed
+    tf32 = runner.check(KERNEL, REFERENCE, spec=spec, variant="ci", dtype="float32")
+    assert not tf32.passed, tf32
+    assert (tf32.rtol, tf32.atol, tf32.oracle_dtype) == (1e-4, 1e-4, "float64")
+    ieee = edited(tmp_path, "tl.dot(x, w, acc)", 'tl.dot(x, w, acc, input_precision="ieee")')
+    assert runner.check(ieee, REFERENCE, spec=spec, variant="ci", dtype="float32").passed

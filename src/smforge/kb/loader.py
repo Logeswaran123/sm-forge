@@ -98,6 +98,24 @@ class KnowledgeBase:
             sections.append(f"## Patterns: {stage}\n\n{body}")
         return "\n".join(sections)
 
+    def render_all(self, families: Iterable[str] = ()) -> str:
+        """Every constraint, then every stage's patterns with their examples, without a budget.
+
+        Patterns for ``families`` (and for any family) come first within each stage; patterns
+        for other families are listed too, since a workspace reader can skip them.
+        """
+        families = set(families)
+        constraints = sorted(self.constraints, key=lambda c: c.severity != "critical")
+        sections = ["## Constraints\n\n" + "\n".join(_constraint(c) for c in constraints)]
+        for stage in Stage:
+            patterns = [p for p in self.patterns if p.stage is stage]
+            if not patterns:
+                continue
+            patterns.sort(key=lambda p: not ({"any", *families} & set(p.applies_to)))
+            body = "\n".join(_pattern(p) + self._diff(self.examples[p.example]) for p in patterns)
+            sections.append(f"## Patterns: {stage}\n\n{body}")
+        return "\n".join(sections)
+
     def _diff(self, example: Example) -> str:
         before, after = self.example_files(example)
         lines = difflib.unified_diff(

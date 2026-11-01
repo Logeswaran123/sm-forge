@@ -13,11 +13,16 @@ Each candidate is checked in this order, and the first failure comes back to you
    `forward` and its helpers may only allocate tensors and change views, layouts and dtypes.
 2. The interface: `Model.__init__` keeps its arguments and creates the same parameters and
    buffers; `get_inputs` and `get_init_inputs` stay as they are.
-3. Correctness against the reference on the `ci` variant (odd sizes) and on `bench-gpu`.
+3. Correctness against the reference on the `ci` variant (odd sizes) and on `bench-gpu`; and,
+   when the current kernel passes it, on `ci` with the problem's float32 inputs.
 4. The launch profile: no cuBLAS, cuDNN, ATen compute or other non-Triton kernel that the current
    kernel does not launch.
 5. Timing on `bench-gpu`, interleaved with the current kernel. The candidate is kept only if it
    is faster by more than $min_effect; otherwise the current kernel stays.
+
+The final kernel must also beat the seed in three more A/B runs in fresh processes, the slowest
+counting. A forward of many short kernels is timed with the host's launch speed, which drops for
+seconds at a time, so it can win one run and lose the next; fewer, larger launches hold up.
 
 Keep `forward` free of host synchronization. `forward` keeps no state between calls: it may not
 assign to `self`, so anything derived from the weights is recomputed on every call.
@@ -26,4 +31,5 @@ Target: $device. Triton $triton, PyTorch $torch.
 
 $knowledge
 
-Reply with the complete file in a single ```python block.
+Start the reply with one sentence saying what you changed, then give the complete file in a
+single ```python block.

@@ -1,4 +1,7 @@
-"""What Nsight Compute profiles: one warm-up forward, then one forward inside the profiler range."""
+"""The program ncu and compute-sanitizer run: a warm-up forward, then one inside the profiler range.
+
+The warm-up compiles the kernels and autotunes them, so it runs every autotune config.
+"""
 
 from __future__ import annotations
 

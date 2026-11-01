@@ -9,6 +9,7 @@ from smforge.models import (
     DeviceProfile,
     FactsReport,
     LaunchProfile,
+    SanitizerReport,
     Severity,
     Timing,
     ValidationIssue,
@@ -49,8 +50,21 @@ def check(result: CheckResult) -> str:
     return "\n".join(lines)
 
 
+def sanitizer(report: SanitizerReport) -> str:
+    if report.ok:
+        return f"{report.tool}: no errors"
+    head = f"{report.errors} errors" if report.errors else "the program failed"
+    lines = [f"{report.tool}: {head}"]
+    lines += [f"  {message}" for message in report.messages]
+    lines += [f"  {line}" for line in (report.detail or "").splitlines()]
+    return "\n".join(lines)
+
+
 def launches(profile: LaunchProfile) -> str:
-    lines = [f"launches per forward, {profile.kernel_us:.1f} us of kernel time:"]
+    head = f"launches per forward, {profile.kernel_us:.1f} us of kernel time"
+    if profile.span_us is not None and len(profile.launches) > 1:
+        head += f"; {profile.span_us:.1f} us first start to last end, {profile.idle_us:.1f} us idle"
+    lines = [head + ":"]
     for launch in profile.launches:
         lines.append(
             f"  {launch.category:<13}{launch.calls:>4g}x {launch.duration_us:>10.1f} us  "

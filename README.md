@@ -86,10 +86,35 @@ smforge-skill check kernel.py --baseline seed.py --spec spec.yaml
 smforge-skill bench kernel.py --spec spec.yaml
 smforge-skill bench kernel.py --baseline seed.py --spec spec.yaml
 smforge-skill facts kernel.py --spec spec.yaml
+smforge-skill sanitize kernel.py --spec spec.yaml --variant ci --tool memcheck
+smforge-skill profile kernel.py --spec spec.yaml --baseline seed.py
 ```
+
+`profile` runs Nsight Compute's SpeedOfLight, MemoryWorkloadAnalysis, Occupancy, LaunchStats,
+WarpStateStats and SourceCounters sections on the first launch of each Triton kernel in one
+forward, prints about 30 lines per kernel with ncu's whole-kernel estimates, and with
+`--baseline` the metrics that changed.
+
+`sanitize` runs compute-sanitizer (`memcheck`, `racecheck`, `initcheck` or `synccheck`) on a
+warm-up forward, which runs every autotune config, and one more forward, with PyTorch's caching
+allocator off so that an out-of-bounds access does not land in a cached block.
 
 Every GPU command runs in a worker subprocess. A kernel that faults the CUDA context kills only
 the worker, which is restarted for the next request.
+
+A trial tree keeps every candidate for one problem, with its parent and what the harness
+measured. `t0` is the baseline. `save` stores a kernel and checks it against `t0` at once (the
+checks `smforge optimize` runs, A/B timing included), so no result can be entered by hand.
+`finalize` copies the fastest trial that beats `t0` and passes the same final check as the
+pipeline (memcheck, then three A/B runs against `t0`); parity and regressions are never
+finalized.
+
+```bash
+smforge-skill trial init --problem l1_002_standard_matrix_multiplication --dir trials
+smforge-skill trial save work/k.py --parent t0 --strategy "128x128 tiles, 4 stages" --dir trials
+smforge-skill trial status --dir trials
+smforge-skill trial finalize output.py --dir trials
+```
 
 ## Corpus
 
@@ -129,14 +154,48 @@ Results go to `results/stages.csv`; candidates, their outcomes and the stage out
 facts, launches, Nsight Compute counters), turns the measurements into fact-backed issues, asks
 the analyzer for the issues the numbers cannot show, and plans the stages those issues route to.
 Each stage gets its issues; after an accepted stage the kernel is measured again. The final
-kernel is kept only if it beats the seed.
+kernel must pass compute-sanitizer memcheck on `ci` and beat the seed in three A/B runs, each in a
+fresh worker, the slowest counting; one that fails gives way to the stage output before it, and
+the seed is kept when none passes. A forward of many short kernels times with the host's launch
+speed, which on a desktop GPU drops for seconds at a time, so a single A/B can overstate it.
+When the three runs spread more than the A/A band (`BENCHMARK_MIN_EFFECT`), the run logs a
+warning; the `ab` and `ab_spread` columns record them.
 
 ```bash
 smforge pipeline --split dev --max-iters 3 --budget-usd 100
+smforge pipeline --split dev --from l2_034_convtranspose3d_layernorm_gelu_scaling
 ```
+
+If ncu or compute-sanitizer does not work when the run starts, the run goes on without it. If
+one stops working partway (counter access withdrawn, say), the run stops and prints the `--from`
+that resumes it, as it does when the LLM backend stops.
 
 Results go to `results/pipeline.csv` (one row per problem) and `results/pipeline_stages.csv`
 (one row per problem and stage).
+
+Every candidate and every trial also adds a line to the problem's lessons ledger,
+`.smforge/lessons/<gpu>/<problem>.md`: what it changed, the check it failed or its speedup. Later
+pipeline runs on the same GPU put the ledger in each stage's prompt.
+
+## Claude Code engine
+
+`smforge claude` gives each problem to a headless Claude Code session in a workspace of its own
+(`.smforge/workspaces/<run>/<problem>/`): the seed as `kernel.py` and trial `t0`, read-only
+copies of the reference and spec, a `CLAUDE.md` with the rules and the measurements of `t0`, the
+knowledge base filtered for the GPU, the stage instructions, the problem's lessons ledger, and an
+`/optimize-kernel` command. The session may write only under `work/` and run only
+`smforge-skill`; it saves each candidate with `smforge-skill trial save`, which checks and times
+it against `t0`. When it stops (or reaches `--max-turns`), sm-forge finalizes the trial tree
+itself: the best trial is checked again in its own worker against the corpus reference, then
+goes through memcheck and three A/B runs against the seed.
+
+```bash
+smforge claude --ids l1_035_groupnorm --max-trials 8 --max-turns 80 --budget-usd 10
+```
+
+It uses `claude` on `PATH` or `CLAUDE_BIN` (or `--claude-bin`), logged in; Opus 5.5 needs Claude
+Code 2.1.280 or newer. A session that fails before its first trial stops the run. Results go to
+`results/claude.csv`; the session's transcript stays in the workspace as `transcript.jsonl`.
 
 ## Knowledge base
 

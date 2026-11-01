@@ -18,7 +18,8 @@ from pydantic import BaseModel
 from smforge import render
 from smforge.agents.seed import task_prompt
 from smforge.corpus.catalog import Problem
-from smforge.harness.ncu import NcuError, profile_ncu
+from smforge.device.tools import tool_status
+from smforge.harness.ncu import NcuError, NcuUnavailable, profile_ncu
 from smforge.harness.runner import Runner
 from smforge.harness.source import KernelSource
 from smforge.harness.static import validate_source
@@ -41,6 +42,7 @@ TIMED_VARIANT = "bench-gpu"
 MIN_BYTES_PER_SECTOR = 24.0
 MAX_CONFLICTS_PER_WAVEFRONT = 0.25
 LAUNCH_BOUND_US = 10.0
+IDLE_SHARE = 0.5
 
 
 @dataclass
@@ -62,15 +64,28 @@ class AnalyzerReply(BaseModel):
     issues: list[AnalyzerIssue]
 
 
-def measure(runner: Runner, kernel: Path, problem: Problem) -> Measurements:
+def measure(runner: Runner, kernel: Path, problem: Problem, ncu: bool = True) -> Measurements:
+    """Timing, facts and launches, and ncu counters when ``ncu``.
+
+    When ncu fails, the tool probe runs once more: if it fails too, ncu is broken for every
+    program (counter access was withdrawn mid-run, say) and NcuUnavailable stops the caller;
+    otherwise only this kernel goes without counters.
+    """
     args = {"spec": problem.spec, "variant": TIMED_VARIANT}
     facts = runner.facts(kernel, **args)
-    try:
-        ncu = profile_ncu(kernel, {k.name for k in facts.kernels}, **args) if facts.kernels else []
-    except (NcuError, OSError) as e:
-        log.warning("ncu unavailable for %s: %s", kernel, e)
-        ncu = None
-    return Measurements(runner.bench(kernel, **args), facts, runner.launches(kernel, **args), ncu)
+    counters = None
+    if ncu:
+        try:
+            names = {k.name for k in facts.kernels}
+            counters = profile_ncu(kernel, names, **args) if names else []
+        except NcuError as e:
+            status = tool_status("ncu")
+            if not status.ok:
+                raise NcuUnavailable(f"ncu stopped working: {status.detail}") from e
+            log.warning("ncu failed on %s: %s", kernel, e)
+    return Measurements(
+        runner.bench(kernel, **args), facts, runner.launches(kernel, **args), counters
+    )
 
 
 def pre_analyze(
@@ -122,7 +137,14 @@ def pre_analyze(
         elif issue.check == "smem_estimate":
             add(IssueType.SMEM_OVER_BUDGET, issue.message, None, "source")
     calls = sum(launch.calls for launch in m.launches.launches)
-    if calls >= 4 and m.launches.kernel_us / calls < LAUNCH_BOUND_US:
+    idle, span = m.launches.idle_us, m.launches.span_us
+    if calls >= 2 and idle and span and idle > IDLE_SHARE * span:
+        add(
+            IssueType.LAUNCH_BOUND,
+            f"{calls:g} launches per forward; the GPU is idle {idle:.1f} of the {span:.1f} us "
+            "from the first kernel's start to the last one's end",
+        )
+    elif calls >= 4 and m.launches.kernel_us / calls < LAUNCH_BOUND_US:
         add(
             IssueType.LAUNCH_BOUND,
             f"{calls:g} launches per forward averaging {m.launches.kernel_us / calls:.1f} us",

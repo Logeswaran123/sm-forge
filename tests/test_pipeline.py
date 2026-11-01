@@ -5,14 +5,19 @@ import pytest
 from test_optimize import slow
 from test_seed import copy_problem, message
 
-from smforge.agents.analyze import Measurements, pre_analyze
-from smforge.agents.pipeline import run_pipeline
+from smforge.agents import analyze, candidate
+from smforge.agents.analyze import Measurements, measure, pre_analyze
+from smforge.agents.optimize import StageResult
+from smforge.agents.pipeline import PipelineResult, finalize, memcheck_summary, run_pipeline
 from smforge.agents.planner import ROUTES, order, plan, routed
 from smforge.config import Config, LLMConfig, TimingConfig
+from smforge.device.tools import tool_status
+from smforge.harness.ncu import NcuError, NcuUnavailable
 from smforge.harness.runner import Runner
 from smforge.kb.loader import load_kb
 from smforge.llm.client import LLMClient
 from smforge.models import (
+    Comparison,
     DeviceInfo,
     DeviceProfile,
     FactsReport,
@@ -23,8 +28,11 @@ from smforge.models import (
     LaunchCategory,
     LaunchProfile,
     NcuKernel,
+    SanitizerReport,
     Stage,
     Timing,
+    ToolStatus,
+    Verdict,
 )
 
 KERNEL = Path(__file__).parent / "kernels" / "linear_relu" / "kernel.py"
@@ -185,6 +193,107 @@ def test_pre_analyze(monkeypatch):
         "tl.dot(a, b, acc)", "tl.dot(a, b, acc, input_precision='ieee')"
     )
     assert pre_analyze(tuned, m, "float32", profile) == []
+    gaps = launches.model_copy(update={"span_us": 61.7, "idle_us": 46.6})
+    two = gaps.model_copy(update={"launches": gaps.launches * 2})
+    issues = pre_analyze(tuned, Measurements(timing, m.facts, two, None), "float32", profile)
+    assert [i.type for i in issues] == [IssueType.LAUNCH_BOUND]
+    assert "idle 46.6 of the 61.7 us" in issues[0].evidence
+
+
+class FakeRunner:
+    def facts(self, kernel, **args):
+        return FactsReport(kernels=[facts()])
+
+    def bench(self, kernel, **args):
+        return Timing(
+            time_us=10, quantile=0.2, median_us=10, mean_us=10, min_us=10, max_us=10, samples=1
+        )
+
+    def launches(self, kernel, **args):
+        return LaunchProfile(launches=[], kernel_us=10)
+
+
+def test_measure_stops_when_ncu_breaks(monkeypatch, tmp_path):
+    problem = copy_problem(tmp_path)
+
+    def fail(*args, **kw):
+        raise NcuError("The application returned an error code (9).")
+
+    monkeypatch.setattr(analyze, "profile_ncu", fail)
+    monkeypatch.setattr(analyze, "tool_status", lambda name: ToolStatus(name=name, ok=True))
+    assert measure(FakeRunner(), problem.seed, problem).ncu is None
+    monkeypatch.setattr(
+        analyze,
+        "tool_status",
+        lambda name: ToolStatus(name=name, ok=False, detail="ERR_NVGPUCTRPERM"),
+    )
+    with pytest.raises(NcuUnavailable, match="ERR_NVGPUCTRPERM"):
+        measure(FakeRunner(), problem.seed, problem)
+    assert measure(FakeRunner(), problem.seed, problem, ncu=False).ncu is None
+
+
+def comparison(speedup: float) -> Comparison:
+    verdict = Verdict.FASTER if speedup > 1.02 else Verdict.PARITY
+    return Comparison(
+        baseline_us=20,
+        candidate_us=20 / speedup,
+        speedup=speedup,
+        verdict=verdict,
+        min_effect=0.02,
+        quantile=0.2,
+        ratios=[speedup],
+    )
+
+
+class Compare:
+    """A runner whose A/B runs return the given speedups in turn."""
+
+    def __init__(self, *speedups: float):
+        self.speedups = list(speedups)
+        self.closed = 0
+
+    def close(self):
+        self.closed += 1
+
+    def compare(self, baseline, candidate, **kw):
+        return comparison(self.speedups.pop(0))
+
+
+def test_finalize_skips_what_memcheck_or_a_repeat_rejects(monkeypatch, tmp_path):
+    problem = copy_problem(tmp_path)
+    first, second = tmp_path / "first.py", tmp_path / "second.py"
+    stages = [
+        StageResult(problem.id, Stage.AUTOTUNING, True, first, 20, 10),
+        StageResult(problem.id, Stage.FUSION, False, first, 10, 10),
+        StageResult(problem.id, Stage.MEMORY_ACCESS, True, second, 10, 5),
+    ]
+    result = PipelineResult(problem.id, "", [], "", [], stages, 20, 20, problem.seed)
+    flagged = SanitizerReport(tool="memcheck", ok=False, errors=3, messages=["Invalid write"])
+    clean = SanitizerReport(tool="memcheck", ok=True, errors=0)
+    monkeypatch.setattr(
+        candidate, "sanitize", lambda kernel, *a: flagged if kernel == second else clean
+    )
+    runner = Compare(2.1, 1.9, 2.0)
+    finalize(result, problem, runner, memcheck=True)
+    assert result.kernel == first and result.ab == [2.1, 1.9, 2.0]
+    assert result.final_us == pytest.approx(20 / 1.9) and runner.closed == 3
+    assert memcheck_summary(result) == "memory_access=3 errors,autotuning=ok"
+
+    result.kernel, result.memcheck = problem.seed, []
+    finalize(result, problem, Compare(2.0, 1.01, 1.5, 1.5, 1.5), memcheck=False)
+    assert result.kernel == first and result.ab == [1.5, 1.5, 1.5]
+    result.kernel = problem.seed
+    finalize(result, problem, Compare(1.01, 1.01), memcheck=False)
+    assert result.kernel == problem.seed and result.final_us == result.seed_us
+
+
+def test_confirmation_spread():
+    stable = candidate.Confirmation(comparisons=[comparison(x) for x in (1.58, 1.57, 1.56)])
+    assert stable.ok and not stable.unstable
+    shaky = candidate.Confirmation(comparisons=[comparison(x) for x in (1.58, 1.57, 1.28)])
+    assert shaky.ok and shaky.unstable and shaky.worst.speedup == 1.28
+    assert candidate.spread([1.58, 1.28]) == pytest.approx(0.2344, abs=1e-4)
+    assert candidate.spread([]) == 0.0
 
 
 @pytest.mark.gpu
@@ -207,11 +316,31 @@ def test_run_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(llm, "_send", send)
     config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=40, rounds=4))
     with Runner(config) as runner:
-        result = run_pipeline(problem, runner, llm, load_kb(), None, 2, tmp_path / "w")
+        memcheck = tool_status("compute-sanitizer").ok
+        ledger = tmp_path / "lessons.md"
+        ledger.write_text(
+            "# linear_relu\n\n## earlier\n\n- autotuning attempt 0: slower: 8x8 tiles\n"
+        )
+        result = run_pipeline(
+            problem,
+            runner,
+            llm,
+            load_kb(),
+            None,
+            2,
+            tmp_path / "w",
+            ncu=False,
+            memcheck=memcheck,
+            ledger=ledger,
+        )
     assert Stage.AUTOTUNING in result.plan
     assert any(s.accepted for s in result.stages)
     assert result.kernel.read_text() == good and result.speedup > 1.5
     assert "untuned_config" in requests[0]["messages"][0]["content"]
+    assert "slower: 8x8 tiles" in requests[-1]["messages"][0]["content"]
+    assert "- autotuning attempt 0: accepted" in ledger.read_text()
+    assert "- final: " in ledger.read_text()
     record = json.loads((tmp_path / "w" / "pipeline.json").read_text())
     assert record["summary"] == "tiles are too small"
+    assert [m["ok"] for m in record["memcheck"]] == ([True] if memcheck else [])
     assert (tmp_path / "w" / "output.py").read_text() == good

@@ -53,7 +53,11 @@ def is_wsl() -> bool:
     return version.exists() and "microsoft" in version.read_text().lower()
 
 
-def check_tools(python: str = sys.executable, timeout: float = 600) -> list[ToolStatus]:
+def check_tools(
+    python: str = sys.executable,
+    timeout: float = 600,
+    names: tuple[str, ...] = ("ncu", "nsys", "compute-sanitizer"),
+) -> list[ToolStatus]:
     """Run each profiler on a one-line CUDA program and report whether it worked."""
     with tempfile.TemporaryDirectory() as tmp:
         commands: dict[str, Callable[[str], list[str]]] = {
@@ -71,7 +75,11 @@ def check_tools(python: str = sys.executable, timeout: float = 600) -> list[Tool
             ],
             "compute-sanitizer": lambda tool: [tool, "--tool", "memcheck", python, "-c", PROGRAM],
         }
-        return [_run_tool(name, command, timeout) for name, command in commands.items()]
+        return [_run_tool(name, commands[name], timeout) for name in names]
+
+
+def tool_status(name: str) -> ToolStatus:
+    return check_tools(names=(name,))[0]
 
 
 def _run_tool(name: str, command: Callable[[str], list[str]], timeout: float) -> ToolStatus:

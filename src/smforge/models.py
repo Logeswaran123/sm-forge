@@ -106,8 +106,13 @@ class Launch(BaseModel):
 
 
 class LaunchProfile(BaseModel):
+    """Kernels per forward. ``span_us`` runs from the first kernel's start to the last one's end
+    in a forward of its own; ``idle_us`` is the part of it no kernel was running."""
+
     launches: list[Launch]
     kernel_us: float
+    span_us: float | None = None
+    idle_us: float | None = None
 
 
 class Timing(BaseModel):
@@ -167,6 +172,38 @@ class NcuKernel(BaseModel):
     load_bytes_per_sector: float | None = None
     store_bytes_per_sector: float | None = None
     shared_conflicts_per_wavefront: float | None = None
+
+
+class NcuMetric(BaseModel):
+    section: str
+    name: str
+    unit: str
+    value: str
+
+
+class NcuRule(BaseModel):
+    """An ncu rule result. ``kind`` is OPT for an optimization hint; ``speedup`` is ncu's
+    estimate in percent, for the whole kernel when ``scope`` is global."""
+
+    section: str
+    name: str
+    kind: str
+    scope: str = ""
+    speedup: float | None = None
+    description: str = ""
+
+
+class NcuProfile(BaseModel):
+    """ncu sections for one launch of one kernel."""
+
+    kernel: str
+    grid: str = ""
+    block: str = ""
+    metrics: list[NcuMetric] = Field(default_factory=list)
+    rules: list[NcuRule] = Field(default_factory=list)
+
+    def values(self) -> dict[tuple[str, str], tuple[str, str]]:
+        return {(m.section, m.name): (m.value, m.unit) for m in self.metrics}
 
 
 class FactsReport(BaseModel):
@@ -268,6 +305,16 @@ class ToolStatus(BaseModel):
     path: str | None = None
     ok: bool
     detail: str = ""
+
+
+class SanitizerReport(BaseModel):
+    """One compute-sanitizer run. ``detail`` says why the program failed without an error."""
+
+    tool: str
+    ok: bool
+    errors: int
+    messages: list[str] = Field(default_factory=list)
+    detail: str | None = None
 
 
 class DeviceProfile(BaseModel):

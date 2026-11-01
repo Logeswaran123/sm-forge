@@ -130,9 +130,15 @@ class Runner:
         rtol: float | None = None,
         atol: float | None = None,
         draws: int | None = None,
+        dtype: str | None = None,
     ) -> CheckResult:
-        variant, dtype, variant_spec = _resolve(spec, variant, index)
-        rtol, atol = resolve_tolerance(dtype, variant_spec, self.config.correctness, rtol, atol)
+        """``dtype`` replaces the variant's dtype, and its tolerance with that dtype's default."""
+        variant, resolved, variant_spec = _resolve(spec, variant, index)
+        if dtype is not None and dtype != resolved:
+            resolved, variant_spec = dtype, None
+        else:
+            dtype = None
+        rtol, atol = resolve_tolerance(resolved, variant_spec, self.config.correctness, rtol, atol)
         try:
             result = self.call(
                 "check",
@@ -141,6 +147,7 @@ class Runner:
                 rtol=rtol,
                 atol=atol,
                 draws=draws or self.config.correctness.draws,
+                dtype=dtype,
                 **_workload(spec, variant, index),
             )
         except WorkerError as e:
