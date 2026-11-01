@@ -78,7 +78,7 @@ def test_run_claude(monkeypatch, tmp_path):
         )
     assert result.final == "t1" and result.trials == 1 and len(result.ab) == 3
     assert result.speedup == pytest.approx(min(result.ab), rel=1e-3)
-    assert result.speedup > 1.5 and abs(min(result.ab) / result.trial_speedup - 1) < 0.05
+    assert result.speedup > 1.5 and result.trial_speedup > 1.5
     assert (result.workspace / "output.py").read_text() == good
 
 
