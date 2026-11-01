@@ -198,14 +198,18 @@ def settings(root: Path) -> dict:
     """Permissions for the session: write only under ``work/``, run only ``smforge-skill``.
 
     They are passed with ``--settings``: Claude Code ignores allow rules in the project settings
-    of a directory nobody has trusted interactively.
+    of a directory nobody has trusted interactively. Auto memory is off, so the session neither
+    reads nor writes memories kept for other work.
     """
     allow = ["Read", "Glob", "Grep", f"Edit(/{root}/work/**)"]
     allow += [f"Bash(smforge-skill {command} *)" for command in SKILL_COMMANDS]
     deny = [f"Edit(/{root}/{name})" for name in READ_ONLY]
     deny += [f"Edit(/{root}/problem/**)", f"Edit(/{root}/trials/**)", f"Edit(/{root}/.claude/**)"]
     deny += ["Bash(smforge-skill trial init *)", "Bash(smforge-skill trial finalize *)"]
-    return {"permissions": {"allow": allow, "deny": deny, "defaultMode": "dontAsk"}}
+    return {
+        "permissions": {"allow": allow, "deny": deny, "defaultMode": "dontAsk"},
+        "autoMemoryEnabled": False,
+    }
 
 
 def run_session(root: Path, config: Config, max_turns: int, budget_usd: float | None) -> Session:
@@ -244,6 +248,7 @@ def run_session(root: Path, config: Config, max_turns: int, budget_usd: float | 
         "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}",
         "CACHE_DIR": str(config.cache_dir.resolve()),
         "HARDWARE_DIR": str(config.hardware_dir.resolve()),
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     }
     with (root / "transcript.jsonl").open("w") as transcript:
         try:
@@ -300,6 +305,8 @@ def run_claude(
     root = tree.root.parent
     session = run_session(root, config, max_turns, budget_usd)
     tree = TrialTree(root / "trials")
+    if session.error and len(tree.trials) == 1:
+        raise ClaudeSessionError(f"the session failed before its first trial: {session.summary}")
     spec = load_spec(problem.spec)
     variant = "ci" if "ci" in spec.variants else None
 
@@ -310,6 +317,8 @@ def run_claude(
     final = tree.finalize(output, memcheck_fn if memcheck else None)
     t0_us = tree.state.baseline_us
     result = ClaudeResult(problem.id, root, session, len(tree.trials) - 1, None, t0_us, t0_us)
+    if session.error:
+        result.notes.append(f"the session ended with an error: {session.summary}")
     if final is None:
         shutil.copyfile(problem.seed, output)
         return result

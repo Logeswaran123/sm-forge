@@ -611,6 +611,8 @@ def cmd_claude(args: argparse.Namespace) -> int:
             if result.remeasured is not None:
                 line += f"; trial {result.trial_speedup:.3f}x, re-measured {result.remeasured:.3f}x"
             print(line, flush=True)
+            for note in result.notes:
+                print(f"  {note}", flush=True)
             print(f"  workspace: {result.workspace}", flush=True)
             upsert(
                 [

@@ -16,6 +16,7 @@ from smforge.kb.loader import load_kb
 
 
 def test_settings():
+    assert settings(Path("/w"))["autoMemoryEnabled"] is False
     rules = settings(Path("/w"))["permissions"]
     assert "Edit(//w/work/**)" in rules["allow"]
     assert "Bash(smforge-skill trial save *)" in rules["allow"]
@@ -78,3 +79,14 @@ def test_run_claude(monkeypatch, tmp_path):
     assert result.final == "t1" and result.trials == 1
     assert result.speedup > 1.5 and abs(result.remeasured / result.trial_speedup - 1) < 0.05
     assert (result.workspace / "output.py").read_text() == good
+
+
+@pytest.mark.gpu
+def test_session_error_stops_the_run(monkeypatch, tmp_path):
+    problem = copy_problem(tmp_path)
+    problem.seed.write_text((PROBLEM / "kernel.py").read_text())
+    failed = Session("success", 1, 0.0, "API Error: 400 version 2.1.280 or newer is required", True)
+    monkeypatch.setattr(ws, "run_session", lambda *args: failed)
+    config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=20, rounds=2))
+    with Runner(config) as runner, pytest.raises(ws.ClaudeSessionError, match="before its first trial"):
+        run_claude(problem, runner, load_kb(), None, config, tmp_path / "ws", 4, 20, ncu=False)
