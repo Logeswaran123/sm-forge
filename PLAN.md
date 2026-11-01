@@ -845,7 +845,7 @@ and measured 1.53, 0.86 and 1.51x, so the three-run finalize would not keep it.
   - built as torch extensions with `torch.utils.cpp_extension.load_inline` (ninja,
     `-arch=sm_120`) and cached by source hash;
   - compile errors parsed to file:line for feedback;
-  - facts from cuobjdump/nvdisasm and cuda-breakdown;
+  - facts from cuobjdump and nvdisasm;
   - validator for launch bounds, bounds checks, and `cudaGetLastError` after launches.
 - KB `cuda/nvidia/`: vectorized loads, shared-memory tiling with padding against bank conflicts,
   `cp.async`, warp-shuffle reductions, `mma.sync` via inline PTX or WMMA, `__launch_bounds__`.
@@ -892,9 +892,8 @@ Built in v0.7.0, with these differences from the list above:
   trace, spills (local bytes) and the SASS mix from cuobjdump, resident CTAs from the device
   limits. A kernel is the file's own when a loaded extension holds its symbol: the profiler names
   kernels as GNU c++filt demangles them, or mangled where c++filt gives up (CUTLASS templates).
-  ncu matches kernels by mangled name. cuda-breakdown (`~/projects/optimizer-tool`) is not a
-  dependency, being unpublished; its instruction mix and occupancy already existed here, and its
-  FMA-efficiency ratio is added as the FFMA share of a kernel without MMA instructions.
+  ncu matches kernels by mangled name. The SASS mix now counts FADD and FMUL, and a kernel without
+  MMA instructions also shows its FFMA share of the fp32 adds and multiplies.
 - Validator: errors for a `<<<...>>>` launch with no `cudaGetLastError` or
   `C10_CUDA_KERNEL_LAUNCH_CHECK` (a failed launch leaves `torch::empty` memory, which can hold an
   earlier correct result), `cudaMalloc` or `cudaFree` per call, `static` state, PyTorch headers in
@@ -981,15 +980,6 @@ Geomean 0.98x: the CUDA pipeline takes its seeds to about where the Triton pipel
 
 Exit: report on the eval split, plus the ablation table.
 
-### Stage 9: host integration (optional)
-
-- `--kernel-repo` for vLLM/SGLang Triton kernels: locate the kernel, copy it as the baseline, build
-  a spec from its call site, emit a patch.
-- `--external-benchmark` with Xe-Forge's stdout contract (`CORRECTNESS`, `VERDICT`, and `DONE` as
-  the last line).
-- CI: lint and CPU unit tests on GitHub Actions. Harness and KB tests on a self-hosted GPU runner.
-- A second GPU (sm_89 or sm_90) to exercise arch gating.
-
 ## 7. Cost
 
 Opus 5.5 costs $4 per MTok input, $20 per MTok output, and $0.20 per MTok for cache reads. Take a
@@ -1031,4 +1021,3 @@ per-kernel cap is set from it.
 - KernelBench: https://github.com/ScalingIntelligence/KernelBench
 - KernelAgent / KernelFalcon: https://github.com/meta-pytorch/KernelAgent
 - AI-bench (Xe-Forge's timing harness): https://github.com/libxsmm/AI-bench
-- cuda-breakdown: `~/projects/optimizer-tool`
