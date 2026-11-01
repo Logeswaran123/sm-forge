@@ -174,6 +174,38 @@ class NcuKernel(BaseModel):
     shared_conflicts_per_wavefront: float | None = None
 
 
+class NcuMetric(BaseModel):
+    section: str
+    name: str
+    unit: str
+    value: str
+
+
+class NcuRule(BaseModel):
+    """An ncu rule result. ``kind`` is OPT for an optimization hint; ``speedup`` is ncu's
+    estimate in percent, for the whole kernel when ``scope`` is global."""
+
+    section: str
+    name: str
+    kind: str
+    scope: str = ""
+    speedup: float | None = None
+    description: str = ""
+
+
+class NcuProfile(BaseModel):
+    """ncu sections for one launch of one kernel."""
+
+    kernel: str
+    grid: str = ""
+    block: str = ""
+    metrics: list[NcuMetric] = Field(default_factory=list)
+    rules: list[NcuRule] = Field(default_factory=list)
+
+    def values(self) -> dict[tuple[str, str], tuple[str, str]]:
+        return {(m.section, m.name): (m.value, m.unit) for m in self.metrics}
+
+
 class FactsReport(BaseModel):
     kernels: list[KernelFacts]
     flop: float | None = None

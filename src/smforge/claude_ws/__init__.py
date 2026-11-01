@@ -57,6 +57,7 @@ SKILL_COMMANDS = (
     "bench",
     "facts",
     "sanitize",
+    "profile",
     "trial save",
     "trial status",
     "trial best",

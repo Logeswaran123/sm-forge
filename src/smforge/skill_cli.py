@@ -5,6 +5,7 @@ check     correctness against an oracle, then the launch audit
 bench     device time, or an interleaved comparison with --baseline
 facts     registers, spills, shared memory, SASS mix and occupancy per launched kernel
 sanitize  compute-sanitizer memcheck, racecheck, initcheck or synccheck
+profile   Nsight Compute sections per kernel, and a diff against a baseline kernel
 trial     the trial tree: init, save (check against t0), status, best, finalize
 """
 
@@ -24,6 +25,7 @@ from smforge.config import get_config
 from smforge.corpus.catalog import Problem, load_problems
 from smforge.device.profile import find_profile
 from smforge.harness.audit import audit_launches, audit_source
+from smforge.harness.ncu import NcuError, diff_profiles, profile_sections, render_profile
 from smforge.harness.runner import Runner
 from smforge.harness.sanitizer import TOOLS, SanitizerError, sanitize
 from smforge.harness.static import validate_source
@@ -84,6 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
         "sanitize", "compute-sanitizer on a warm-up forward and one more", cmd_sanitize
     )
     sanitize.add_argument("--tool", choices=TOOLS, default="memcheck")
+
+    profile = command("profile", "Nsight Compute sections for one forward's kernels", cmd_profile)
+    profile.add_argument("--baseline", type=Path, help="also profile this kernel and diff")
+    profile.add_argument("--kernel-name", help="only this kernel (default: every Triton kernel)")
 
     trial = commands.add_parser("trial", help="the trial tree: init, save, status, best, finalize")
     trial_commands = trial.add_subparsers(dest="trial_command", required=True)
@@ -206,6 +212,32 @@ def cmd_sanitize(args: argparse.Namespace) -> int:
         return 2
     print(report.model_dump_json(indent=2) if args.json else render.sanitizer(report))
     return 0 if report.ok else 1
+
+
+def cmd_profile(args: argparse.Namespace) -> int:
+    """ncu sections for the first launch of each Triton kernel; a diff against ``--baseline``."""
+    kernels = [args.kernel] + ([args.baseline] if args.baseline else [])
+    profiles = []
+    with Runner() as runner:
+        names = [
+            {args.kernel_name}
+            if args.kernel_name
+            else {k.name for k in runner.facts(path, **_workload(args)).kernels}
+            for path in kernels
+        ]
+    try:
+        for path, wanted in zip(kernels, names, strict=True):
+            profiles.append(profile_sections(path, wanted, args.spec, args.variant))
+    except NcuError as e:
+        print(f"ncu failed: {e}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps([[p.model_dump(mode="json") for p in ps] for ps in profiles], indent=2))
+        return 0
+    print("\n\n".join(render_profile(p) for p in profiles[0]))
+    if args.baseline:
+        print(f"\nChanges from {args.baseline}:\n{diff_profiles(profiles[1], profiles[0])}")
+    return 0
 
 
 def cmd_trial_init(args: argparse.Namespace) -> int:

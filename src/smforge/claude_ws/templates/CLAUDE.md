@@ -57,10 +57,14 @@ smforge-skill check work/k.py --reference problem/reference.py --spec problem/sp
 smforge-skill bench work/k.py --baseline kernel.py --spec problem/spec.yaml
 smforge-skill facts work/k.py --spec problem/spec.yaml
 smforge-skill sanitize work/k.py --spec problem/spec.yaml --variant ci
+smforge-skill profile work/k.py --spec problem/spec.yaml --baseline trials/t1.py
 ```
 
 `trial save` takes a minute or two: it runs every check above. `--parent` names the trial the
-new one starts from. Give each trial its own file under `work/`.
+new one starts from. Give each trial its own file under `work/`. `profile` runs Nsight Compute on
+each kernel's first launch in one forward (speed of light, memory, occupancy, launch, warp state,
+source counters, and ncu's own estimates), and with `--baseline` lists what changed; it needs
+GPU performance-counter access and fails without it.
 
 ## Reading
 

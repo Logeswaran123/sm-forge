@@ -87,7 +87,13 @@ smforge-skill bench kernel.py --spec spec.yaml
 smforge-skill bench kernel.py --baseline seed.py --spec spec.yaml
 smforge-skill facts kernel.py --spec spec.yaml
 smforge-skill sanitize kernel.py --spec spec.yaml --variant ci --tool memcheck
+smforge-skill profile kernel.py --spec spec.yaml --baseline seed.py
 ```
+
+`profile` runs Nsight Compute's SpeedOfLight, MemoryWorkloadAnalysis, Occupancy, LaunchStats,
+WarpStateStats and SourceCounters sections on the first launch of each Triton kernel in one
+forward, prints about 30 lines per kernel with ncu's whole-kernel estimates, and with
+`--baseline` the metrics that changed.
 
 `sanitize` runs compute-sanitizer (`memcheck`, `racecheck`, `initcheck` or `synccheck`) on a
 warm-up forward, which runs every autotune config, and one more forward, with PyTorch's caching
