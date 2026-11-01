@@ -169,7 +169,7 @@ ruff check .
 ```bibtex
 @software{smforge2026,
   title  = {sm-forge: LLM-driven kernel optimization for NVIDIA GPUs},
-  author = {Logeswaran123},
+  author = {Sivakumar, Logeswaran},
   year   = {2026},
   url    = {https://github.com/Logeswaran123/sm-forge}
 }
