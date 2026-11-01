@@ -30,6 +30,11 @@ class KnowledgeBase:
     patterns: list[Pattern] = field(default_factory=list)
     examples: dict[str, Example] = field(default_factory=dict)
 
+    @property
+    def fence(self) -> str:
+        """Code-fence language of the constraint snippets: the CUDA knowledge base's are C++."""
+        return "cpp" if self.root.name == Dsl.CUDA.value else "python"
+
     def check_files(self, constraint: Constraint) -> tuple[Path, Path]:
         """``wrong.py`` and ``correct.py`` of a constraint."""
         path = self.root / "checks" / constraint.id
@@ -75,7 +80,7 @@ class KnowledgeBase:
         left = budget * CHARS_PER_TOKEN
         kept_constraints = []
         for constraint in constraints:
-            text = _constraint(constraint)
+            text = _constraint(constraint, self.fence)
             if len(text) <= left:
                 kept_constraints.append(text)
                 left -= len(text)
@@ -107,7 +112,9 @@ class KnowledgeBase:
         """
         families = set(families)
         constraints = sorted(self.constraints, key=lambda c: c.severity != "critical")
-        sections = ["## Constraints\n\n" + "\n".join(_constraint(c) for c in constraints)]
+        sections = [
+            "## Constraints\n\n" + "\n".join(_constraint(c, self.fence) for c in constraints)
+        ]
         for stage in Stage:
             patterns = [p for p in self.patterns if p.stage is stage]
             if not patterns:
@@ -130,11 +137,11 @@ class KnowledgeBase:
         return f"Example on {example.problem}:\n```diff\n" + "\n".join(lines) + "\n```\n"
 
 
-def _constraint(c: Constraint) -> str:
+def _constraint(c: Constraint, fence: str) -> str:
     return (
         f"- **{c.id}** ({c.severity}): {c.rule.strip()}\n"
-        f"  Wrong:\n  ```python\n{_indent(c.wrong)}\n  ```\n"
-        f"  Correct:\n  ```python\n{_indent(c.correct)}\n  ```\n"
+        f"  Wrong:\n  ```{fence}\n{_indent(c.wrong)}\n  ```\n"
+        f"  Correct:\n  ```{fence}\n{_indent(c.correct)}\n  ```\n"
     )
 
 
