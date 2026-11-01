@@ -166,6 +166,25 @@ Every candidate and every trial also adds a line to the problem's lessons ledger
 `.smforge/lessons/<gpu>/<problem>.md`: what it changed, the check it failed or its speedup. Later
 pipeline runs on the same GPU put the ledger in each stage's prompt.
 
+## Claude Code engine
+
+`smforge claude` gives each problem to a headless Claude Code session in a workspace of its own
+(`.smforge/workspaces/<run>/<problem>/`): the seed as `kernel.py` and trial `t0`, read-only
+copies of the reference and spec, a `CLAUDE.md` with the rules and the measurements of `t0`, the
+knowledge base filtered for the GPU, the stage instructions, the problem's lessons ledger, and an
+`/optimize-kernel` command. The session may write only under `work/` and run only
+`smforge-skill`; it saves each candidate with `smforge-skill trial save`, which checks and times
+it against `t0`. When it stops (or reaches `--max-turns`), sm-forge finalizes the trial tree
+itself, memcheck included, and checks the winner again in its own worker against the corpus
+reference.
+
+```bash
+smforge claude --ids l1_035_groupnorm --max-trials 8 --max-turns 80 --budget-usd 10
+```
+
+It uses `claude` on `PATH` or `CLAUDE_BIN`, logged in. Results go to `results/claude.csv`; the
+session's transcript stays in the workspace as `transcript.jsonl`.
+
 ## Knowledge base
 
 `knowledge_base/triton/` holds the constraints and optimization patterns the LLM stages see.

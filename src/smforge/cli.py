@@ -15,6 +15,7 @@ from smforge import render
 from smforge.agents.optimize import PROMPTS, optimize_stage
 from smforge.agents.pipeline import memcheck_summary, run_pipeline
 from smforge.agents.seed import seed_problem
+from smforge.claude_ws import ClaudeSessionError, run_claude
 from smforge.config import get_config
 from smforge.corpus.build import import_kernelbench
 from smforge.corpus.catalog import (
@@ -27,6 +28,8 @@ from smforge.corpus.catalog import (
 )
 from smforge.corpus.kernelbench import LEVEL1, Untranslatable, problem_id, problem_number
 from smforge.corpus.results import (
+    CLAUDE,
+    CLAUDE_FIELDS,
     PIPELINE,
     PIPELINE_FIELDS,
     PIPELINE_KEY,
@@ -165,6 +168,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-memcheck", action="store_true", help="finalize without compute-sanitizer memcheck"
     )
     pipeline.set_defaults(func=cmd_pipeline)
+
+    claude = commands.add_parser(
+        "claude", help="optimize corpus problems in a headless Claude Code workspace (stage 6)"
+    )
+    claude.add_argument("--ids", help="comma-separated problem ids")
+    claude.add_argument("--source", help="only problems from this source")
+    claude.add_argument("--split", choices=("dev", "eval"))
+    claude.add_argument(
+        "--max-trials", type=int, default=8, help="trials the session is told to try"
+    )
+    claude.add_argument("--max-turns", type=int, default=80, help="turn cap for the session")
+    claude.add_argument("--budget-usd", type=float, help="dollar cap per session")
+    claude.add_argument("--effort", help="session effort (low, medium, high, xhigh, max)")
+    claude.add_argument("--claude-bin", help="Claude Code binary")
+    claude.add_argument("--no-ncu", action="store_true", help="measure t0 without Nsight Compute")
+    claude.add_argument(
+        "--no-memcheck", action="store_true", help="finalize without compute-sanitizer memcheck"
+    )
+    claude.set_defaults(func=cmd_claude)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
@@ -426,26 +448,12 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
             print(f"--from {args.start}: not among the selected problems", file=sys.stderr)
             return 2
         problems = problems[ids.index(args.start) :]
-    ncu = not args.no_ncu
-    if ncu:
-        status = tool_status("ncu")
-        if not status.ok:
-            print(
-                f"ncu unavailable ({status.detail}): running without counters, so "
-                "uncoalesced_access and bank_conflict are not detected",
-                flush=True,
-            )
-            ncu = False
-    memcheck = not args.no_memcheck
-    if memcheck:
-        status = tool_status("compute-sanitizer")
-        if not status.ok:
-            print(
-                f"compute-sanitizer unavailable ({status.detail}): "
-                "final kernels are not memchecked",
-                flush=True,
-            )
-            memcheck = False
+    ncu = not args.no_ncu and _tool_ok(
+        "ncu", "running without counters, so uncoalesced_access and bank_conflict go undetected"
+    )
+    memcheck = not args.no_memcheck and _tool_ok(
+        "compute-sanitizer", "final kernels are not memchecked"
+    )
     run = time.strftime("%Y%m%d-%H%M%S")
     llm = create_client(
         config.llm,
@@ -549,6 +557,96 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
         f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
     )
     return 0
+
+
+def cmd_claude(args: argparse.Namespace) -> int:
+    config = get_config()
+    if args.claude_bin:
+        config.llm.claude_bin = args.claude_bin
+    if args.effort:
+        config.llm.efforts["optimizer"] = args.effort
+    problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
+    ncu = not args.no_ncu and _tool_ok("ncu", "t0 is measured without counters")
+    memcheck = not args.no_memcheck and _tool_ok(
+        "compute-sanitizer", "final kernels are not memchecked"
+    )
+    run = time.strftime("%Y%m%d-%H%M%S")
+    profile = find_profile(config.hardware_dir, config.device)
+    kb = load_kb()
+    if profile is not None:
+        kb = kb.for_device(profile)
+    spent = 0.0
+    with Runner(config) as runner:
+        stamp = provenance(runner.call("device"))
+        for problem in problems:
+            workdir = config.cache_dir / "workspaces" / run / problem.id
+            try:
+                result = run_claude(
+                    problem,
+                    runner,
+                    kb,
+                    profile,
+                    config,
+                    workdir,
+                    args.max_trials,
+                    args.max_turns,
+                    args.budget_usd,
+                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
+                    ncu,
+                    memcheck,
+                )
+            except (ClaudeSessionError, NcuUnavailable) as e:
+                print(f"{e}\nstopped at {problem.id}", file=sys.stderr)
+                return 2
+            except WorkerError as e:
+                print(f"{problem.id}: FAILED: {str(e).splitlines()[0]}", flush=True)
+                continue
+            spent += result.session.cost_usd
+            session = result.session
+            line = (
+                f"{problem.id}: {result.speedup:.2f}x ({result.final or 'seed kept'}; "
+                f"{result.trials} trials, {session.turns} turns, {session.stop}, "
+                f"${session.cost_usd:.2f})"
+            )
+            if result.remeasured is not None:
+                line += f"; trial {result.trial_speedup:.3f}x, re-measured {result.remeasured:.3f}x"
+            print(line, flush=True)
+            print(f"  workspace: {result.workspace}", flush=True)
+            upsert(
+                [
+                    {
+                        "problem": problem.id,
+                        "seed_us": f"{result.seed_us:.2f}",
+                        "final_us": f"{result.final_us:.2f}",
+                        "speedup": f"{result.speedup:.3f}",
+                        "final_trial": result.final or "",
+                        "trials": result.trials,
+                        "trial_speedup": _fmt(result.trial_speedup),
+                        "remeasured": _fmt(result.remeasured),
+                        "turns": session.turns,
+                        "stop": session.stop,
+                        "cost_usd": f"{session.cost_usd:.4f}",
+                        "model": config.llm.model,
+                        **stamp,
+                    }
+                ],
+                CLAUDE,
+                CLAUDE_FIELDS,
+                PIPELINE_KEY,
+            )
+    print(f"spent ${spent:.2f} on {len(problems)} problems")
+    return 0
+
+
+def _tool_ok(name: str, consequence: str) -> bool:
+    status = tool_status(name)
+    if not status.ok:
+        print(f"{name} unavailable ({status.detail}): {consequence}", flush=True)
+    return status.ok
+
+
+def _fmt(value: float | None) -> str:
+    return f"{value:.3f}" if value is not None else ""
 
 
 def _llm_config(args: argparse.Namespace):

@@ -1,6 +1,7 @@
 """Result tables: ``results/baselines.csv``, one row per problem, variant and mode;
-``results/stages.csv``, one row per problem for a stage run on its own; and
-``results/pipeline.csv`` with ``results/pipeline_stages.csv`` for full pipeline runs."""
+``results/stages.csv``, one row per problem for a stage run on its own;
+``results/pipeline.csv`` with ``results/pipeline_stages.csv`` for full pipeline runs; and
+``results/claude.csv``, one row per problem for the Claude Code workspace engine."""
 
 from __future__ import annotations
 
@@ -63,6 +64,25 @@ PIPELINE_FIELDS = (
     "date",
 )
 PIPELINE_KEY = ("problem",)
+CLAUDE = Path("results") / "claude.csv"
+CLAUDE_FIELDS = (
+    "problem",
+    "seed_us",
+    "final_us",
+    "speedup",
+    "final_trial",
+    "trials",
+    "trial_speedup",
+    "remeasured",
+    "turns",
+    "stop",
+    "cost_usd",
+    "model",
+    "gpu",
+    "triton",
+    "commit",
+    "date",
+)
 
 
 def load_results(path: Path = RESULTS) -> list[dict[str, str]]:
