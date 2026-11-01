@@ -70,8 +70,8 @@ class GemmShape(BaseModel):
 
 
 class GemmConfig(BaseModel):
-    tile: tuple[int, int, int] = Field(description="threadblock tile M, N, K")
-    warp: tuple[int, int, int] = Field(description="warp tile M, N, K")
+    tile: list[int] = Field(description="threadblock tile M, N, K")
+    warp: list[int] = Field(description="warp tile M, N, K")
     stages: int = Field(description="cp.async pipeline stages, 2 to 6")
     swizzle: int = Field(1, description="threadblock raster swizzle: 1, 2, 4 or 8")
     split_k: int = Field(1, description="split-K slices, 1 for none; swizzle is ignored above 1")
@@ -119,6 +119,8 @@ def validate(config: GemmConfig, shape: GemmShape, smem_limit: int) -> str | Non
     """Why the config cannot build or run on this shape and device, or None."""
     if reason := unsupported(shape):
         return reason
+    if len(config.tile) != 3 or len(config.warp) != 3:
+        return "tile and warp take three values each: M, N, K"
     (tm, tn, tk), (wm, wn, wk) = config.tile, config.warp
     if tm % wm or tn % wn or tk != wk:
         return "the warp tile must divide the threadblock tile, with the same K"
@@ -208,12 +210,20 @@ class Trial:
 
 @dataclass
 class SearchResult:
+    """``cublas_us`` is the first bench of the reference, which the proposals see. The final
+    numbers come from interleaved A/B runs: the best config against the fitted default
+    (``default_us``, ``best_us``, ``vs_default``) and against cuBLAS (``final_cublas_us``,
+    ``vs_cublas``). A single bench can land in one of the host's slow spells."""
+
     shape: GemmShape
     default: Trial
     fitted: Trial
     cublas_us: float
     trials: list[Trial] = field(default_factory=list)
     best: Trial | None = None
+    default_us: float | None = None
+    best_us: float | None = None
+    final_cublas_us: float | None = None
     vs_default: float | None = None
     vs_cublas: float | None = None
     usage: Usage = field(default_factory=Usage)
@@ -287,9 +297,12 @@ def search(
     spec = root / "spec.yaml"
     if fitted_trial.us is not None:
         baseline = root / f"{fitted.label}.py"
-        result.vs_default = runner.compare(baseline, best, spec=spec, variant="bench-gpu").speedup
+        comparison = runner.compare(baseline, best, spec=spec, variant="bench-gpu")
+        result.default_us, result.best_us = comparison.baseline_us, comparison.candidate_us
+        result.vs_default = comparison.speedup
     comparison = runner.compare(reference, best, spec=spec, variant="bench-gpu")
-    result.vs_cublas = comparison.speedup
+    result.final_cublas_us, result.vs_cublas = comparison.baseline_us, comparison.speedup
+    result.best_us = result.best_us or comparison.candidate_us
     return result
 
 

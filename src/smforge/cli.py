@@ -778,20 +778,23 @@ def cmd_tile_search(args: argparse.Namespace) -> int:
             )
             if best is not None:
                 print(
-                    f"  best {best.row} ({result.tflops(best.us):.1f} TFLOPS); "
-                    f"vs default {_fmt(result.vs_default)}x, vs cuBLAS {_fmt(result.vs_cublas)}x",
+                    f"  best {best.config.label}: A/B {_fmt(result.best_us, '.1f')} us "
+                    f"({result.tflops(result.best_us):.1f} TFLOPS) against default "
+                    f"{_fmt(result.default_us, '.1f')} us ({_fmt(result.vs_default)}x) and "
+                    f"cuBLAS {_fmt(result.final_cublas_us, '.1f')} us ({_fmt(result.vs_cublas)}x)",
                     flush=True,
                 )
             upsert(
                 [
                     {
                         "shape": shape.label,
-                        "cublas_us": f"{result.cublas_us:.2f}",
-                        "default": fitted.config.label,
-                        "default_us": _fmt(fitted.us, ".2f"),
+                        "cublas_us": _fmt(result.final_cublas_us or result.cublas_us, ".2f"),
+                        "default": fitted.config.label
+                        + ("" if fitted.us else f" ({fitted.status})"),
+                        "default_us": _fmt(result.default_us or fitted.us, ".2f"),
                         "best": best.config.label if best else "",
-                        "best_us": _fmt(best.us if best else None, ".2f"),
-                        "best_tflops": _fmt(result.tflops(best.us) if best else None, ".1f"),
+                        "best_us": _fmt(result.best_us, ".2f"),
+                        "best_tflops": _fmt(result.tflops(result.best_us), ".1f"),
                         "vs_default": _fmt(result.vs_default),
                         "vs_cublas": _fmt(result.vs_cublas),
                         "configs": len(result.trials),
