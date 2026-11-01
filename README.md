@@ -96,6 +96,19 @@ allocator off so that an out-of-bounds access does not land in a cached block.
 Every GPU command runs in a worker subprocess. A kernel that faults the CUDA context kills only
 the worker, which is restarted for the next request.
 
+A trial tree keeps every candidate for one problem, with its parent and what the harness
+measured. `t0` is the baseline. `save` stores a kernel and checks it against `t0` at once (the
+checks `smforge optimize` runs, A/B timing included), so no result can be entered by hand.
+`finalize` copies the fastest trial that beats `t0` and passes memcheck; parity and regressions
+are never finalized.
+
+```bash
+smforge-skill trial init --problem l1_002_standard_matrix_multiplication --dir trials
+smforge-skill trial save work/k.py --parent t0 --strategy "128x128 tiles, 4 stages" --dir trials
+smforge-skill trial status --dir trials
+smforge-skill trial finalize output.py --dir trials
+```
+
 ## Corpus
 
 Problems live in `corpus/<source>/<id>/`: `reference.py`, `spec.yaml`, `problem.yaml`, and once
