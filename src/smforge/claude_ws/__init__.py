@@ -42,19 +42,38 @@ from smforge.agents.candidate import (
     float32_note,
     make_base,
 )
-from smforge.agents.optimize import PROMPTS
 from smforge.agents.seed import task_prompt
 from smforge.config import Config
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
 from smforge.lessons import read as read_lessons
-from smforge.models import DeviceProfile, Stage
+from smforge.llm.prompting import stage_text, values
+from smforge.models import DeviceProfile, Dsl, Stage
 from smforge.spec import load_spec
 from smforge.trials import TrialTree
 
 log = logging.getLogger(__name__)
 TEMPLATES = Path(__file__).parent / "templates"
+LANGUAGE = {
+    Dsl.TRITON: lambda v: {
+        "language": "Triton",
+        "toolchain": f"Triton {v['triton']}",
+        "layout": "",
+        "compute_rule": "all computation runs in `@triton.jit` kernels; `forward` and its "
+        "helpers may only allocate tensors and change views, layouts and dtypes.",
+        "foreign": "other non-Triton kernel",
+    },
+    Dsl.CUDA: lambda v: {
+        "language": "CUDA C++",
+        "toolchain": f"CUDA {v['cuda']} (`{v['arch']}`)",
+        "layout": f"\n## Kernel file layout\n\n{v['format']}\n",
+        "compute_rule": "all computation runs in the file's CUDA kernels; `forward` and its "
+        "helpers may only allocate tensors, change views, layouts and dtypes, and call the "
+        "extension; the binding may only check, unpack and allocate tensors.",
+        "foreign": "other kernel outside the file's extension",
+    },
+}
 SESSION_TIMEOUT = 4 * 3600
 TOOLS = "Bash,Read,Edit,Write,Glob,Grep"
 SKILL_COMMANDS = (
@@ -131,14 +150,7 @@ def build_workspace(
     issues = pre_analyze(problem.seed.read_text(), measured, dtype, profile)
     tree = TrialTree.create(root / "trials", problem, problem.seed, runner, ledger)
     float32 = float32_note(tree.base())
-    device, triton, torch = "an NVIDIA GPU", "3.x", "2.x"
-    if profile is not None:
-        d = profile.device
-        device = (
-            f"{d.name} ({d.arch}), {d.sm_count} SMs, {d.l2_bytes >> 20} MB L2, "
-            f"{d.smem_per_block // 1024} KB shared memory per block"
-        )
-        triton, torch = d.triton, d.torch.split("+")[0]
+    toolchain = values(profile, problem.dsl)
     task = (
         task_prompt(problem, spec)
         .replace("(`reference.py`)", "(`problem/reference.py`)")
@@ -150,9 +162,9 @@ def build_workspace(
     (root / "CLAUDE.md").write_text(
         Template((TEMPLATES / "CLAUDE.md").read_text()).substitute(
             problem=problem.id,
-            device=device,
-            triton=triton,
-            torch=torch,
+            device=toolchain["device"],
+            torch=toolchain["torch"],
+            **LANGUAGE[problem.dsl](toolchain),
             task=task,
             measurements=measurements_text(measured, dtype, profile),
             issues=issues_text(issues),
@@ -163,10 +175,7 @@ def build_workspace(
     (root / "kb.md").write_text("# Knowledge base\n\n" + kb.render_all([problem.family]) + "\n")
     (root / "stages.md").write_text(
         "# Optimization stages\n\n"
-        + "\n".join(
-            f"## {stage}\n\n{(PROMPTS / 'stages' / f'{stage}.md').read_text().strip()}\n"
-            for stage in Stage
-        )
+        + "\n".join(f"## {stage}\n\n{stage_text(problem.dsl, stage)}\n" for stage in Stage)
     )
     past = read_lessons(ledger, lines=200)
     (root / "lessons.md").write_text(
@@ -177,7 +186,8 @@ def build_workspace(
             {
                 "problem": problem.id,
                 "family": problem.family,
-                "device": device,
+                "device": toolchain["device"],
+                "dsl": str(problem.dsl),
                 "timed_variant": TIMED_VARIANT,
                 "min_effect": min_effect,
                 "max_trials": max_trials,

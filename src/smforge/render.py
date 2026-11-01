@@ -101,14 +101,16 @@ def comparison(result: Comparison) -> str:
 
 def facts(report: FactsReport, ridge: float | None = None) -> str:
     if not report.kernels:
-        return "no Triton kernel launched"
+        return "no kernel of the file launched"
     lines = []
     for kernel in report.kernels:
         grid = "x".join(map(str, kernel.grid))
-        lines.append(
-            f"{kernel.name}: grid {grid} ({kernel.ctas} CTAs), {kernel.num_warps} warps, "
-            f"{kernel.num_stages} stages"
-        )
+        shape = f"{kernel.num_warps} warps"
+        if kernel.block:
+            shape = f"block {'x'.join(map(str, kernel.block))} ({shape})"
+        if kernel.num_stages is not None:
+            shape += f", {kernel.num_stages} stages"
+        lines.append(f"{kernel.name}: grid {grid} ({kernel.ctas} CTAs), {shape}")
         occupancy = ""
         if kernel.ctas_per_sm:
             occupancy = f", {kernel.ctas_per_sm} CTAs/SM, {kernel.waves:.2f} waves"
@@ -118,6 +120,11 @@ def facts(report: FactsReport, ridge: float | None = None) -> str:
         )
         counts = ", ".join(f"{op} {n}" for op, n in {**kernel.mma, **kernel.instructions}.items())
         lines.append(f"  sass: {kernel.total_instructions} instructions; {counts}")
+        ops = kernel.instructions
+        floating = sum(ops.get(op, 0) for op in ("FFMA", "FADD", "FMUL"))
+        if floating and not kernel.mma:
+            share = ops.get("FFMA", 0) / floating
+            lines.append(f"  FFMA share of fp32 FFMA/FADD/FMUL: {share:.0%}")
     if report.intensity:
         line = f"arithmetic intensity {report.intensity:.1f} FLOP/byte"
         if ridge:

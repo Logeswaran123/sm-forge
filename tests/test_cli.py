@@ -48,6 +48,6 @@ def test_check_and_bench(capsys):
     assert report["check"]["passed"]
     assert report["audit"] == []
     assert main(["check", REFERENCE, "--baseline", KERNEL, "--spec", SPEC, "--variant", "ci"]) == 1
-    assert "no_triton_launch" in capsys.readouterr().out
+    assert "no_own_launch" in capsys.readouterr().out
     assert main(["bench", KERNEL, "--baseline", KERNEL, "--spec", SPEC, "--variant", "ci"]) == 0
     assert "x," in capsys.readouterr().out

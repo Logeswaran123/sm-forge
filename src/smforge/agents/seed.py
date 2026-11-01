@@ -1,4 +1,4 @@
-"""Seed kernels: a straightforward, correct Triton kernel for each corpus problem.
+"""Seed kernels: a straightforward, correct Triton or CUDA C++ kernel for each corpus problem.
 
 A candidate passes when the static checks and the forward-path audit find no error, it matches
 the reference on the ``ci`` variant (odd sizes) and on ``bench-gpu``, and its forward launches no
@@ -11,7 +11,6 @@ import json
 import subprocess
 from datetime import date
 from pathlib import Path
-from string import Template
 
 import yaml
 
@@ -23,26 +22,16 @@ from smforge.harness.runner import Runner
 from smforge.harness.static import validate_source
 from smforge.harness.tolerance import resolve_tolerance
 from smforge.llm.client import Completer
-from smforge.models import CheckResult, DeviceProfile, Severity
+from smforge.llm.prompting import fill
+from smforge.models import CheckResult, DeviceProfile, Dsl, Severity
 from smforge.spec import KernelSpec, load_spec
 
-PROMPT = Path(__file__).parent.parent / "llm" / "prompts" / "seed.md"
 CHECK_VARIANTS = ("ci", "bench-gpu")
 ERROR_CHARS = 4000
 
 
-def system_prompt(profile: DeviceProfile | None) -> str:
-    if profile is None:
-        device, triton, torch = "an NVIDIA GPU", "3.x", "2.x"
-    else:
-        d = profile.device
-        supported = [name for name, ok in profile.features.items() if ok]
-        device = (
-            f"{d.name} ({d.arch}), {d.sm_count} SMs, {d.smem_per_block // 1024} KB shared "
-            f"memory per block; supported: {', '.join(supported)}"
-        )
-        triton, torch = d.triton, d.torch.split("+")[0]
-    return Template(PROMPT.read_text()).substitute(device=device, triton=triton, torch=torch)
+def system_prompt(profile: DeviceProfile | None, dsl: Dsl = Dsl.TRITON) -> str:
+    return fill(dsl, "seed.md", profile)
 
 
 def task_prompt(problem: Problem, spec: KernelSpec) -> str:
@@ -109,7 +98,7 @@ def seed_problem(
     workdir.mkdir(parents=True, exist_ok=True)
     result = cover(
         llm,
-        system_prompt(profile),
+        system_prompt(profile, problem.dsl),
         task_prompt(problem, spec),
         verifier(problem, spec, runner, workdir),
         max_iters,
@@ -149,4 +138,4 @@ def _write_provenance(problem: Problem, llm: Completer, result: CoverResult) -> 
         "commit": commit,
         "date": date.today().isoformat(),
     }
-    (problem.path / "seed.yaml").write_text(yaml.safe_dump(record, sort_keys=False))
+    problem.seed_record.write_text(yaml.safe_dump(record, sort_keys=False))

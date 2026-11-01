@@ -1,0 +1,9 @@
+model: claude-opus-5-5
+effort: high
+attempts: 1
+cost_usd: 0.0659
+input_tokens: 2
+output_tokens: 2730
+cache_read_tokens: 2275
+commit: 649b534
+date: '2026-11-01'

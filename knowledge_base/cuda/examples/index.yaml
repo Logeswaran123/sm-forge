@@ -1,0 +1,16 @@
+examples:
+- id: gelu_vectorized_loads
+  problem: l1_026_gelu
+  description: GELU with one scalar load and store per element, then 16-byte loads and stores.
+- id: linear_smem_padding
+  problem: l2_063_gemm_relu_divide
+  description: SIMT linear layer whose transposed shared tiles are [16][64], then [16][65].
+- id: gemm_wmma_tensor_cores
+  problem: l1_002_standard_matrix_multiplication
+  description: fp16 GEMM with 4x4 FFMA outputs per thread, then WMMA 16x16x16 fragments.
+- id: gemm_cp_async_pipeline
+  problem: l1_002_standard_matrix_multiplication
+  description: WMMA GEMM with synchronous tile loads, then a two-stage cp.async pipeline.
+- id: gemm_cutlass_sm80
+  problem: l1_002_standard_matrix_multiplication
+  description: hand-written WMMA and cp.async GEMM, then CUTLASS's SM80 GEMM (128x128x32, 4 stages).

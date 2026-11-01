@@ -66,6 +66,28 @@ PIPELINE_FIELDS = (
     "date",
 )
 PIPELINE_KEY = ("problem",)
+TILESEARCH = Path("results") / "tilesearch.csv"
+TILESEARCH_FIELDS = (
+    "shape",
+    "cublas_us",
+    "default",
+    "default_us",
+    "best",
+    "best_us",
+    "best_tflops",
+    "vs_default",
+    "vs_cublas",
+    "configs",
+    "invalid",
+    "failed",
+    "cost_usd",
+    "model",
+    "gpu",
+    "triton",
+    "commit",
+    "date",
+)
+TILESEARCH_KEY = ("shape",)
 CLAUDE = Path("results") / "claude.csv"
 CLAUDE_FIELDS = (
     "problem",

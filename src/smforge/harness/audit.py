@@ -1,8 +1,10 @@
-"""Checks that a candidate computes with its own Triton kernels.
+"""Checks that a candidate computes with its own kernels, Triton or CUDA.
 
 The source rule looks at the forward path for calls into PyTorch compute, ``nn`` layers and
-dynamic imports. The launch rule compares the CUDA kernels one forward launches with the
-baseline's: a vendor or ATen compute kernel the baseline does not launch is an error.
+dynamic imports; in a ``cuda`` file, calls on the built extension are the kernels, and the C++
+binding may only allocate, reshape and check tensors. The launch rule compares the CUDA kernels
+one forward launches with the baseline's: a vendor or ATen compute kernel the baseline does not
+launch is an error.
 """
 
 from __future__ import annotations
@@ -112,6 +114,21 @@ COMPUTE_METHODS = frozenset(
         "where",
     }
 )
+ALLOWED_CPP = frozenset(
+    {
+        "empty",
+        "empty_like",
+        "empty_strided",
+        "full",
+        "full_like",
+        "ones",
+        "ones_like",
+        "zeros",
+        "zeros_like",
+    }
+)
+_CPP_CALL = re.compile(r"\b(?:torch|at)::(?:nn::functional::|native::)?([a-z]\w*)\s*\(")
+_CPP_METHOD = re.compile(r"\.\s*([a-z_]\w*)\s*(?:<[^<>()]*>)?\s*\(")
 _DYNAMIC_CALLS = frozenset({"__import__", "compile", "eval", "exec"})
 _PARAMETER_TYPES = frozenset({"Parameter", "ParameterList", "ParameterDict", "Buffer"})
 
@@ -126,7 +143,7 @@ def audit_source(code: str, allow: Iterable[str] = ()) -> list[ValidationIssue]:
     """Calls in the forward path that compute with PyTorch instead of a Triton kernel."""
     src = KernelSource(code)
     allowed = ALLOWED_TORCH | set(allow)
-    issues = _dynamic_code(src)
+    issues = _dynamic_code(src) + _binding(src, allowed)
     layers = _layer_attributes(src)
     for fn in src.forward_path():
         for node in ast.walk(fn):
@@ -151,12 +168,44 @@ def _call(
     if not isinstance(func, ast.Attribute):
         return []
     owner = func.value
+    if isinstance(owner, ast.Name) and owner.id in src.extensions:
+        return []
     if isinstance(owner, ast.Name) and owner.id == "self" and func.attr in layers:
         layer = layers[func.attr]
         return [_error("torch_module_call", f"self.{func.attr} is a {layer} layer", call)]
     if func.attr in COMPUTE_METHODS and func.attr not in allowed:
         return [_error("tensor_compute_method", f".{func.attr}() computes in PyTorch", call)]
     return []
+
+
+def _binding(src: KernelSource, allowed: frozenset[str]) -> list[ValidationIssue]:
+    """PyTorch compute called from the C++ binding of a ``cuda`` file."""
+    from smforge.harness.cuda_static import code_only
+
+    issues = []
+    for source in src.cuda_sources("cpp"):
+        code = code_only(source.text)
+        for match in _CPP_CALL.finditer(code):
+            if match.group(1) not in ALLOWED_CPP | allowed:
+                issues.append(
+                    ValidationIssue(
+                        check="binding_compute",
+                        severity=Severity.ERROR,
+                        message=f"{match.group(0).rstrip('( ')} computes in PyTorch inside the binding",
+                        line=source.file_line(match.start()),
+                    )
+                )
+        for match in _CPP_METHOD.finditer(code):
+            if match.group(1) in COMPUTE_METHODS - allowed:
+                issues.append(
+                    ValidationIssue(
+                        check="binding_compute",
+                        severity=Severity.ERROR,
+                        message=f".{match.group(1)}() computes in PyTorch inside the binding",
+                        line=source.file_line(match.start()),
+                    )
+                )
+    return issues
 
 
 def _torch_allowed(path: str, allowed: frozenset[str]) -> bool:
@@ -218,9 +267,13 @@ def audit_interface(candidate: str, baseline: str) -> list[ValidationIssue]:
     return issues
 
 
-def classify_launch(name: str, triton_names: set[str]) -> LaunchCategory:
+def classify_launch(
+    name: str, triton_names: set[str], cuda_names: set[str] = frozenset()
+) -> LaunchCategory:
     if name in triton_names:
         return LaunchCategory.TRITON
+    if name in cuda_names:
+        return LaunchCategory.CUDA
     if name.startswith(("Memcpy", "Memset")):
         return LaunchCategory.MEMORY
     if "at::native" in name:
@@ -236,8 +289,9 @@ def audit_launches(
     candidate: LaunchProfile, baseline: LaunchProfile | None = None
 ) -> list[ValidationIssue]:
     issues = []
-    if not any(launch.category is LaunchCategory.TRITON for launch in candidate.launches):
-        issues.append(_error("no_triton_launch", "the forward launched no Triton kernel"))
+    own = (LaunchCategory.TRITON, LaunchCategory.CUDA)
+    if not any(launch.category in own for launch in candidate.launches):
+        issues.append(_error("no_own_launch", "the forward launched none of the file's kernels"))
     known = {launch.name for launch in baseline.launches} if baseline else set()
     for launch in candidate.launches:
         if launch.name in known:

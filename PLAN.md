@@ -273,13 +273,15 @@ sm-forge/
       worker.py               # subprocess entry: build, run, check, time
       workload.py             # kernel loading, inputs and Model construction per variant
       source.py               # AST view of a kernel file
-      static.py               # Triton static validator
-      audit.py                # forward-path rules, launch audit
+      static.py               # static validator; dispatches CUDA files to cuda_static
+      cuda_static.py          # CUDA and C++ source rules
+      audit.py                # forward-path rules, binding audit, launch audit
       tolerance.py
       correctness.py          # output comparison, weight copy, reference cache
       timing.py               # events, L2 flush, quantile, interleaved A/B, verdict
       launches.py             # kernels one forward launches, from the profiler
       facts.py                # regs, spills, smem, SASS mix, occupancy, waves
+      cuda_facts.py           # the same for CUDA kernels, from the profiler trace and cuobjdump
       ncu.py                  # ncu counters, section profiles and diffs
       sanitizer.py            # compute-sanitizer wrapper
     kb/
@@ -288,7 +290,8 @@ sm-forge/
       verify.py               # runs each entry's kernel pair on the GPU
     llm/
       client.py               # SDK wrapper: caching, structured output, usage, cost cap, replay
-      prompts/                # jinja templates per role and stage
+      prompting.py            # prompt files per language, device values
+      prompts/                # per role and stage; cuda/ for CUDA C++
     agents/
       analyzer.py
       planner.py
@@ -298,16 +301,14 @@ sm-forge/
     trials.py                 # trial tree
     lessons.py
     claude_ws/                # Claude Code workspace generator and templates
-    dsl/
-      triton.py
-      cuda_cpp.py             # stage 7
-    tile_search/              # stage 7
+    cuda/                     # build(): nvcc, precompiled binding header, cache, CUTLASS fetch
+    tilesearch/               # CUTLASS GEMM template, config validation, search loop
   knowledge_base/
     triton/constraints.yaml
     triton/patterns/<stage>.yaml
     triton/checks/<constraint>/{wrong.py,correct.py}
     triton/examples/{index.yaml,measured.yaml,<example>/{before.py,after.py}}
-    cuda/                     # stage 7
+    cuda/                     # the same layout for CUDA C++
   corpus/
     <id>/{reference.py,kernel.py,spec.yaml}
     splits.yaml               # dev / eval
@@ -858,6 +859,106 @@ and measured 1.53, 0.86 and 1.51x, so the three-run finalize would not keep it.
 
 Exit: CUDA C++ seeds go through the same pipeline. Tile search beats CUTLASS's default config on a
 set of GEMM shapes.
+
+Built in v0.7.0, with these differences from the list above:
+
+- CUTLASS on sm_120 (v4.8.1): the SM120 collective builders take only fp8, fp6 and fp4 operands
+  in TN layout ("SM120 TmaWarpSpecialized builder currently only supports F8F6F4 MMA"), so fp16
+  and bf16 GEMMs use the SM80 device GEMM (`mma.sync`, `cp.async`), which runs on sm_120. Its
+  default config (128x256x64 tile, 64x64x64 warps, 3 stages) needs 147456 bytes of shared memory
+  and fails to launch where a block gets 101376. The CuTe DSL (nvidia-cutlass-dsl 4.8.1) runs on
+  sm_120a: its GeForce fp16 GEMM (TMA, warp-specialized, 7 tile shapes in the example) built
+  and ran in about 3 s. Best of a few configs each, fp16 in, float accumulate:
+
+  | M x N x K | CUTLASS C++ SM80 | CuTe DSL | cuBLAS |
+  |---|---|---|---|
+  | 4096 x 4096 x 4096 | 1366 us | 1312 us | 1279 to 1364 us |
+  | 2048 x 4096 x 8192 | 1241 us | 1227 us | 1248 us |
+  | 16384 x 32768 x 64 | 1251 us | 1271 us | 1378 us |
+
+  The tile search uses the C++ GEMM: more parameters (warp shape, stages, swizzle, split-K,
+  alignment), epilogue functors for fused problems, and the same build path as CUDA seeds. The
+  DSL wheel is 289 MB and pulls cuda-bindings 13, which conflicts with torch's below 13.
+- No DSL registry package: a kernel file is CUDA when it imports `smforge.cuda`, and
+  `Problem.dsl` picks `kernel.py` or `kernel_cuda.py`. The harness, prompts, KB, results files and
+  lessons ledger follow it; `--dsl cuda` on `seed`, `optimize`, `pipeline`, `claude` and `kb`.
+- Builds: `load_inline` with the device code kept free of PyTorch headers and the binding built
+  against a precompiled `torch/extension.h` in the cache (730 MB). A trivial extension took 29.2 s
+  with PyTorch's headers in both files; split this way, a new kernel builds in 4 to 6 s, CUTLASS
+  included, and a cached one loads at once. PyTorch's own `use_pch` writes the header into the
+  torch install, shared with other projects, so sm-forge builds its own. CUTLASS's headers are a
+  sparse git checkout at v4.8.1 in the cache (37 MB).
+- Facts: grid, block, registers and shared memory (dynamic included) come from the profiler's
+  trace, spills (local bytes) and the SASS mix from cuobjdump, resident CTAs from the device
+  limits. A kernel is the file's own when a loaded extension holds its symbol: the profiler names
+  kernels as GNU c++filt demangles them, or mangled where c++filt gives up (CUTLASS templates).
+  ncu matches kernels by mangled name. cuda-breakdown (`~/projects/optimizer-tool`) is not a
+  dependency, being unpublished; its instruction mix and occupancy already existed here, and its
+  FMA-efficiency ratio is added as the FFMA share of a kernel without MMA instructions.
+- Validator: errors for a `<<<...>>>` launch with no `cudaGetLastError` or
+  `C10_CUDA_KERNEL_LAUNCH_CHECK` (a failed launch leaves `torch::empty` memory, which can hold an
+  earlier correct result), `cudaMalloc` or `cudaFree` per call, `static` state, PyTorch headers in
+  the device code and PyTorch compute in the binding; warnings for no `__launch_bounds__`, no
+  bounds check against an integer parameter, the default stream and host syncs.
+- KB `cuda/`: 10 constraints and 5 patterns, all verified on the RTX 5080: WMMA over FFMA 2.11x,
+  a two-stage `cp.async` pipeline 2.25x, CUTLASS SM80 over that 1.22x, 16-byte loads 1.21x,
+  padded transposed tiles 1.09x. Warp-shuffle reductions are not in it: on RMSNorm (63.5 us both)
+  and cumsum (2630 against 2632 us) the kernels are memory-bound at the corpus shapes, and the
+  shuffles measured at parity.
+- CUDA seeds for 14 dev problems, one per family where possible: all passed on the first attempt,
+  $0.93 through Claude Code.
+- Tile search: split-K uses CUTLASS's parallel form. The serial form adds each slice into the
+  fp16 output and missed the tolerance where large partials cancel. K and N must be even, since
+  `cp.async` copies at least 4 bytes; l1_008's 8205 x 5921 x 2949 is out. The proposals see
+  single benches; the reported times come from interleaved A/B runs, since one bench read
+  6211 us for a config a rerun timed at 1514 us.
+- Tile-search configs and the final A/B runs each get a fresh worker. In one long-lived worker,
+  CUTLASS's default config timed 6452 and 2209 us on two shapes where fresh workers gave 1514 and
+  1201 us; the other configs in that worker timed as they do alone. The cause is not known.
+
+Result (2026-11-01), tile search: `smforge tile-search` through Claude Code (Opus 5.5, effort
+medium), 3 rounds of 6 configs per shape, on the corpus GEMM shapes:
+
+| Shape (problem) | CUTLASS default, fitted | Best config | Best | vs default | vs cuBLAS |
+|---|---|---|---|---|---|
+| 4096 x 4096 x 4096, B [K, N] (l1_001) | 1301.5 us | 64x128x64, 32x64 warps, 3 stages, swizzle 8 | 1183.0 us | 1.100x | 1.004x |
+| 2048 x 4096 x 8192, B [K, N] (l1_002) | 1483.8 us | 64x64x64, 32x32 warps, 4 stages, swizzle 4 | 1186.8 us | 1.250x | 1.024x |
+| 1024 x 8192 x 8192, B [N, K] (l2_063) | 1516.5 us | 64x64x64, 32x32 warps, 3 stages, swizzle 2 | 1167.2 us | 1.299x | 1.048x |
+| 16384 x 32768 x 64, B [K, N] (l1_007) | 1200.1 us | 64x256x32, 64x64 warps, 2 stages, swizzle 2 | 1182.7 us | 1.015x, parity | 1.034x |
+| 256 x 256 x 524288 bf16, B [K, N] (l1_006) | fails the check | 256x128x32, 64x64 warps, 3 stages, split-K 42 | 630.6 us | - | 0.995x |
+
+90 configs, $0.39. The fitted default is CUTLASS's tile with 2 stages, since the shipped config
+does not launch on sm_120. The search beats it by 1.10x to 1.30x on three shapes. At K=64 both
+are bound by writing the 1 GB output, and the best is at parity. On the large-K shape the
+default fails the correctness check, and the best split-K config matches cuBLAS. That check
+compares with cuBLAS's bf16 result, which at K=524288 is near its own rounding: the unsplit
+default misses on 589 of 65536 outputs by up to 16, and 7 of the 18 split-K configs miss, one
+of them on 2 outputs. A float32 oracle would judge them against the exact product instead.
+l1_008 (8205 x 5921 x 2949) is not searched: its rows are not 4-byte aligned.
+
+Result (2026-11-01), CUDA pipeline: `smforge pipeline --dsl cuda` on the 14 CUDA seeds, with
+stage 5's settings (at most 2 stages plus autotuning, 2 candidates per stage, Opus 5.5 at effort
+medium, ncu and memcheck on): 13 improved, geomean 2.81x and median 1.64x over the CUDA seeds,
+$11.57. Every final passed memcheck and three A/B runs in fresh workers; on l1_002 (5.9%) and
+l2_057 (7.9%) the runs spread beyond the A/A band and the slowest counts. l1_089 kept its seed.
+The finals use CUTLASS SM80 GEMMs on l1_002 and l2_063, tensor-core MMA on attention prefill
+and l2_057, and warp shuffles and vector loads on the rest. The CUDA seeds start far below the
+Triton ones (l2_057 6204 us, attention prefill 33.6 ms). Against stage 5's Triton finals, in
+fresh-worker A/B runs on `bench-gpu`:
+
+| Problem | Triton final | CUDA final | CUDA vs Triton |
+|---|---|---|---|
+| l2_063_gemm_relu_divide | 1196.9 us | 1144.8 us | 1.05x |
+| l1_002_standard_matrix_multiplication | 1167.4 us | 1124.1 us | 1.04x |
+| inf_silu_and_mul | 194.6 us | 189.7 us | 1.03x |
+| l1_095, l1_026, l1_048, l1_089, inf_rmsnorm, inf_rope | | | parity |
+| inf_layernorm | 59.5 us | 61.5 us | 0.97x |
+| inf_softmax_vocab | 215.1 us | 225.3 us | 0.95x |
+| l1_035_groupnorm | 1075.2 us | 1154.3 us | 0.93x |
+| inf_attention_prefill | 1286.1 us | 1404.9 us | 0.92x |
+| l2_057_conv2d_relu_hardswish | 184.3 us | 202.8 us | 0.91x |
+
+Geomean 0.98x: the CUDA pipeline takes its seeds to about where the Triton pipeline ends.
 
 ### Stage 8: evaluation
 

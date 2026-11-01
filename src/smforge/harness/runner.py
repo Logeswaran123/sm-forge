@@ -16,10 +16,12 @@ from pathlib import Path
 from typing import Any
 
 from smforge.config import Config, get_config
+from smforge.harness.source import KernelSource
 from smforge.harness.tolerance import resolve_tolerance
 from smforge.models import (
     CheckResult,
     Comparison,
+    Dsl,
     FactsReport,
     LaunchProfile,
     ReferenceProfile,
@@ -216,8 +218,19 @@ class Runner:
     def facts(
         self, kernel: Path, *, spec: Path | None = None, variant: str | None = None, index: int = 0
     ) -> FactsReport:
+        """A ``cuda`` file's facts come from the profiler, so like ``launches`` they are taken in a
+        fresh worker and retried once in a new one."""
         variant = _resolve(spec, variant, index)[0]
-        result = self.call("facts", kernel=str(kernel), **_workload(spec, variant, index))
+        args = {"kernel": str(kernel), **_workload(spec, variant, index)}
+        if KernelSource(kernel.read_text()).dsl is not Dsl.CUDA:
+            return FactsReport.model_validate(self.call("facts", **args))
+        self.close()
+        try:
+            result = self.call("facts", **args)
+        except WorkerError as e:
+            if not str(e).startswith("ProfilerUnavailable"):
+                raise
+            result = self.call("facts", **args)
         return FactsReport.model_validate(result)
 
     def profile_reference(

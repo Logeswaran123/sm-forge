@@ -10,9 +10,10 @@ from pathlib import Path
 import yaml
 
 from smforge.kb.schema import Constraint, Example, Measurement, Pattern
-from smforge.models import DeviceProfile, Stage
+from smforge.models import DeviceProfile, Dsl, Stage
 
-KB_DIR = Path("knowledge_base") / "triton"
+KB_ROOT = Path("knowledge_base")
+KB_DIR = KB_ROOT / "triton"
 MEASURED = "measured.yaml"
 TOKEN_BUDGET = 6000
 CHARS_PER_TOKEN = 4
@@ -144,6 +145,11 @@ def _pattern(p: Pattern) -> str:
 
 def _indent(code: str) -> str:
     return "\n".join(f"  {line}" if line else "" for line in code.strip().splitlines())
+
+
+def kb_dir(dsl: Dsl) -> Path:
+    """``knowledge_base/<dsl>/``: each kernel language has its own constraints and patterns."""
+    return KB_ROOT / dsl.value
 
 
 def load_kb(root: Path = KB_DIR) -> KnowledgeBase:

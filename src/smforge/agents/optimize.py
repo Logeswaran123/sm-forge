@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from string import Template
 
 from smforge.agents.analyze import Measurements, measurements_text
 from smforge.agents.candidate import TIMED_VARIANT, check_candidate, float32_note, make_base
@@ -21,10 +20,9 @@ from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
 from smforge.llm.client import Completer, Usage
-from smforge.models import DeviceProfile, Stage
+from smforge.llm.prompting import fill, stage_text
+from smforge.models import DeviceProfile, Dsl, Stage
 from smforge.spec import load_spec
-
-PROMPTS = Path(__file__).parent.parent / "llm" / "prompts"
 
 
 @dataclass
@@ -53,24 +51,19 @@ class StageResult:
 
 
 def system_prompt(
-    stage: Stage, profile: DeviceProfile | None, knowledge: str, min_effect: float
+    stage: Stage,
+    profile: DeviceProfile | None,
+    knowledge: str,
+    min_effect: float,
+    dsl: Dsl = Dsl.TRITON,
 ) -> str:
-    if profile is None:
-        device, triton, torch = "an NVIDIA GPU", "3.x", "2.x"
-    else:
-        d = profile.device
-        device = (
-            f"{d.name} ({d.arch}), {d.sm_count} SMs, {d.l2_bytes >> 20} MB L2, "
-            f"{d.smem_per_block // 1024} KB shared memory per block"
-        )
-        triton, torch = d.triton, d.torch.split("+")[0]
-    return Template((PROMPTS / "optimize.md").read_text()).substitute(
+    return fill(
+        dsl,
+        "optimize.md",
+        profile,
         stage=stage.value,
-        instructions=(PROMPTS / "stages" / f"{stage.value}.md").read_text().strip(),
+        instructions=stage_text(dsl, stage.value),
         min_effect=f"{min_effect:.0%}",
-        device=device,
-        triton=triton,
-        torch=torch,
         knowledge=knowledge,
     )
 
@@ -114,7 +107,8 @@ def optimize_stage(
         sections.append(notes)
     task = "\n\n".join(sections)
     min_effect = runner.config.timing.min_effect
-    system = system_prompt(stage, profile, kb.render(stage, [problem.family]), min_effect)
+    knowledge = kb.render(stage, [problem.family])
+    system = system_prompt(stage, profile, knowledge, min_effect, problem.dsl)
     result = StageResult(problem.id, stage, False, kernel, timing.time_us, timing.time_us)
     candidates: dict[int, Candidate] = {}
 

@@ -130,7 +130,7 @@ def test_audit_launches():
     triton = ("matmul_kernel", LaunchCategory.TRITON)
     reduce = ("at::native::reduce_kernel", LaunchCategory.ATEN_COMPUTE)
     assert audit_launches(profile(triton)) == []
-    assert checks(audit_launches(profile(gemm))) == ["no_triton_launch", "vendor_launch"]
+    assert checks(audit_launches(profile(gemm))) == ["no_own_launch", "vendor_launch"]
     assert checks(audit_launches(profile(triton, gemm, reduce), profile(gemm))) == [
         "aten_compute_launch"
     ]

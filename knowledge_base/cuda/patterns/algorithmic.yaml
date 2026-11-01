@@ -1,0 +1,13 @@
+patterns:
+- id: tensor_cores_for_matrix_products
+  stage: algorithmic
+  applies_to: [gemm, matmul, conv2d, conv3d, bmm]
+  summary: >-
+    Compute fp16 and bf16 matrix products on tensor cores (WMMA or mma.sync) instead of with
+    scalar FFMA.
+  how: >-
+    Stage A and B tiles in shared memory and let each warp multiply 16x16x16 fragments with
+    nvcuda::wmma (mma.h): load_matrix_sync from shared memory, mma_sync into float accumulator
+    fragments, store_matrix_sync to a float tile that the block converts and writes with bounds
+    checks. Four warps on a 64x64 tile, each owning 32x32 as 2x2 fragments, is a simple start.
+  example: gemm_wmma_tensor_cores

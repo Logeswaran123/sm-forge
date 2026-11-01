@@ -1,7 +1,9 @@
 """The corpus on disk: problems, their metadata and the dev/eval split.
 
 A problem is a directory ``corpus/<source>/<id>/`` holding ``reference.py``, ``spec.yaml`` and
-``problem.yaml``, and once seeded, ``kernel.py``.
+``problem.yaml``, and once seeded, ``kernel.py`` (Triton) or ``kernel_cuda.py`` (CUDA C++), each
+with its provenance in ``seed.yaml`` or ``seed_cuda.yaml``. ``Problem.dsl`` says which seed a
+caller works with; ``for_dsl`` gives the same problem for the other language.
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
+
+from smforge.models import Dsl
 
 CORPUS_DIR = Path("corpus")
 SPLITS = "splits.yaml"
@@ -24,6 +28,10 @@ class Problem(BaseModel):
     upstream: str | None = None
     notes: list[str] = Field(default_factory=list)
     path: Path = Field(exclude=True)
+    dsl: Dsl = Field(default=Dsl.TRITON, exclude=True)
+
+    def for_dsl(self, dsl: Dsl) -> Problem:
+        return self.model_copy(update={"dsl": dsl})
 
     @property
     def reference(self) -> Path:
@@ -35,7 +43,11 @@ class Problem(BaseModel):
 
     @property
     def seed(self) -> Path:
-        return self.path / "kernel.py"
+        return self.path / ("kernel_cuda.py" if self.dsl is Dsl.CUDA else "kernel.py")
+
+    @property
+    def seed_record(self) -> Path:
+        return self.path / ("seed_cuda.yaml" if self.dsl is Dsl.CUDA else "seed.yaml")
 
 
 def load_problems(root: Path = CORPUS_DIR) -> list[Problem]:

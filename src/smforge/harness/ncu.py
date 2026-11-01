@@ -16,6 +16,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from smforge.cuda import function_name
 from smforge.device.tools import find_tool
 from smforge.models import NcuKernel, NcuMetric, NcuProfile, NcuRule
 
@@ -117,7 +118,8 @@ class NcuUnavailable(NcuError):
 def profile_ncu(
     kernel: Path, names: set[str], spec: Path | None = None, variant: str | None = None
 ) -> list[NcuKernel]:
-    """Counters for the launches of the kernels named ``names``, one entry per name."""
+    """Counters for the launches of the kernels named ``names`` (Triton names, or the mangled
+    symbols of CUDA kernels), one entry per kernel."""
     options = ["--page", "raw", "--metrics", ",".join(METRICS.values())]
     return parse(_run(kernel, names, options, spec, variant))
 
@@ -147,6 +149,8 @@ def _run(
         "--csv",
         "--profile-from-start",
         "off",
+        "--kernel-name-base",
+        "mangled",
         *options,
         "--kernel-name",
         "regex:^(" + "|".join(re.escape(name) for name in sorted(names)) + ")$",
@@ -175,7 +179,7 @@ def parse_details(text: str) -> list[NcuProfile]:
     profiles: dict[str, NcuProfile] = {}
     first: dict[str, str] = {}
     for row in csv.DictReader(io.StringIO(table)):
-        name = row["Kernel Name"]
+        name = function_name(row["Kernel Name"])
         if first.setdefault(name, row["ID"]) != row["ID"]:
             continue
         profile = profiles.setdefault(
@@ -322,7 +326,7 @@ def parse(text: str) -> list[NcuKernel]:
     rows = list(csv.DictReader(io.StringIO(table)))
     launches: dict[str, list[dict]] = defaultdict(list)
     for row in rows[1:]:
-        launches[row["Kernel Name"]].append(row)
+        launches[function_name(row["Kernel Name"])].append(row)
     return [_kernel(name, runs) for name, runs in launches.items()]
 
 

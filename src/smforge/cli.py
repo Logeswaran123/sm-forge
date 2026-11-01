@@ -13,7 +13,7 @@ from pathlib import Path
 
 from smforge import render
 from smforge.agents.candidate import spread
-from smforge.agents.optimize import PROMPTS, optimize_stage
+from smforge.agents.optimize import optimize_stage
 from smforge.agents.pipeline import memcheck_summary, run_pipeline
 from smforge.agents.seed import seed_problem
 from smforge.claude_ws import ClaudeSessionError, run_claude
@@ -38,6 +38,9 @@ from smforge.corpus.results import (
     STAGE_FIELDS,
     STAGE_KEY,
     STAGES,
+    TILESEARCH,
+    TILESEARCH_FIELDS,
+    TILESEARCH_KEY,
     provenance,
     upsert,
 )
@@ -46,7 +49,7 @@ from smforge.device.tools import check_tools, tool_status
 from smforge.harness.ncu import NcuUnavailable
 from smforge.harness.runner import Runner, WorkerError
 from smforge.harness.sanitizer import SanitizerUnavailable
-from smforge.kb.loader import TOKEN_BUDGET, load_kb, record_measurement
+from smforge.kb.loader import TOKEN_BUDGET, kb_dir, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.lessons import ledger_path
 from smforge.llm.claude_code import ClaudeCodeError
@@ -57,10 +60,20 @@ from smforge.llm.client import (
     ReplayMiss,
     create_client,
 )
-from smforge.models import DeviceInfo, DeviceProfile, NoiseResult, ProbeResult, Roofline, Stage
+from smforge.llm.prompting import PROMPTS
+from smforge.models import (
+    DeviceInfo,
+    DeviceProfile,
+    Dsl,
+    NoiseResult,
+    ProbeResult,
+    Roofline,
+    Stage,
+)
 from smforge.spec import load_spec
 
 STAGE_PROMPTS = {path.stem for path in (PROMPTS / "stages").glob("*.md")}
+DSLS = [dsl.value for dsl in Dsl]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     seed = commands.add_parser("seed", help="write a seed kernel for corpus problems with the LLM")
     seed.add_argument("--ids", help="comma-separated problem ids")
+    seed.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     seed.add_argument("--source", help="only problems from this source (kernelbench, inference)")
     seed.add_argument("--split", choices=("dev", "eval"))
     seed.add_argument("--max-iters", type=int, default=4, help="attempts per problem")
@@ -133,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     optimize.add_argument("--stage", required=True, choices=sorted(STAGE_PROMPTS))
     optimize.add_argument("--ids", help="comma-separated problem ids")
+    optimize.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     optimize.add_argument("--source", help="only problems from this source")
     optimize.add_argument("--split", choices=("dev", "eval"))
     optimize.add_argument("--max-iters", type=int, default=3, help="candidates per problem")
@@ -148,6 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
         "pipeline", help="analyze, plan and run every stage on corpus problems (stage 5)"
     )
     pipeline.add_argument("--ids", help="comma-separated problem ids")
+    pipeline.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     pipeline.add_argument("--source", help="only problems from this source")
     pipeline.add_argument("--split", choices=("dev", "eval"))
     pipeline.add_argument("--max-iters", type=int, default=2, help="candidates per stage")
@@ -174,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
         "claude", help="optimize corpus problems in a headless Claude Code workspace (stage 6)"
     )
     claude.add_argument("--ids", help="comma-separated problem ids")
+    claude.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     claude.add_argument("--source", help="only problems from this source")
     claude.add_argument("--split", choices=("dev", "eval"))
     claude.add_argument(
@@ -189,16 +206,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     claude.set_defaults(func=cmd_claude)
 
+    tiles = commands.add_parser(
+        "tile-search", help="search CUTLASS GEMM tile configs with the LLM (stage 7)"
+    )
+    tiles.add_argument(
+        "--shapes", required=True, help="comma-separated MxNxK, optionally :bfloat16 and :row"
+    )
+    tiles.add_argument("--rounds", type=int, default=3, help="proposal rounds per shape")
+    tiles.add_argument("--per-round", type=int, default=6, help="configs per round")
+    tiles.add_argument("--effort", help="proposer effort (low, medium, high, xhigh, max)")
+    tiles.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    tiles.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    tiles.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
+    tiles.set_defaults(func=cmd_tile_search)
+
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
 
     kb_list = kb_commands.add_parser("list", help="entries with their stage and measured speedup")
+    kb_list.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     kb_list.set_defaults(func=cmd_kb_list)
 
     show = kb_commands.add_parser("show", help="a stage's slice as a prompt receives it")
     show.add_argument("stage", choices=[stage.value for stage in Stage])
     show.add_argument("--families", help="comma-separated corpus families")
     show.add_argument("--budget", type=int, default=TOKEN_BUDGET, help="token budget")
+    show.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     show.set_defaults(func=cmd_kb_show)
 
     verify = kb_commands.add_parser("verify", help="run every entry's kernel pair on the GPU")
@@ -206,6 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--write", action="store_true", help="record example speedups in measured.yaml"
     )
+    verify.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     verify.set_defaults(func=cmd_kb_verify)
     return parser
 
@@ -379,7 +413,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         replay=args.replay,
     )
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     accepted = 0
@@ -430,7 +464,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
                 "model": config.llm.model,
                 **stamp,
             }
-            upsert([row], STAGES, STAGE_FIELDS, STAGE_KEY)
+            upsert([row], _results(STAGES, args), STAGE_FIELDS, STAGE_KEY)
     print(
         f"accepted {accepted} of {len(problems)}; "
         f"spent ${llm.usage.cost_usd:.2f} in {llm.usage.calls} calls"
@@ -463,7 +497,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
         replay=args.replay,
     )
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     improved = 0
@@ -484,7 +518,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     args.max_stages,
                     ncu,
                     memcheck,
-                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
+                    _ledger(config.cache_dir, stamp["gpu"], problem),
                 )
             except BudgetExceeded as e:
                 print(f"stopping: {e}; resume with --from {problem.id}", flush=True)
@@ -529,7 +563,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                         **stamp,
                     }
                 ],
-                PIPELINE,
+                _results(PIPELINE, args),
                 PIPELINE_FIELDS,
                 PIPELINE_KEY,
             )
@@ -550,7 +584,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                     }
                     for s in result.stages
                 ],
-                PIPELINE_STAGES,
+                _results(PIPELINE_STAGES, args),
                 STAGE_FIELDS,
                 STAGE_KEY,
                 drop={"problem": problem.id},
@@ -575,7 +609,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
     )
     run = time.strftime("%Y%m%d-%H%M%S")
     profile = find_profile(config.hardware_dir, config.device)
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     if profile is not None:
         kb = kb.for_device(profile)
     spent = 0.0
@@ -594,7 +628,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                     args.max_trials,
                     args.max_turns,
                     args.budget_usd,
-                    ledger_path(config.cache_dir, stamp["gpu"], problem.id),
+                    _ledger(config.cache_dir, stamp["gpu"], problem),
                     ncu,
                     memcheck,
                 )
@@ -637,7 +671,7 @@ def cmd_claude(args: argparse.Namespace) -> int:
                         **stamp,
                     }
                 ],
-                CLAUDE,
+                _results(CLAUDE, args),
                 CLAUDE_FIELDS,
                 PIPELINE_KEY,
             )
@@ -652,8 +686,8 @@ def _tool_ok(name: str, consequence: str) -> bool:
     return status.ok
 
 
-def _fmt(value: float | None) -> str:
-    return f"{value:.3f}" if value is not None else ""
+def _fmt(value: float | None, spec: str = ".3f") -> str:
+    return format(value, spec) if value is not None else ""
 
 
 def _llm_config(args: argparse.Namespace):
@@ -668,6 +702,8 @@ def _llm_config(args: argparse.Namespace):
 
 
 def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:
+    """The selected problems, for ``--dsl``'s seed."""
+    problems = [p.for_dsl(_dsl(args)) for p in problems]
     if getattr(args, "ids", None):
         wanted = set(args.ids.split(","))
         problems = [p for p in problems if p.id in wanted]
@@ -679,6 +715,21 @@ def _select(problems: list[Problem], args: argparse.Namespace) -> list[Problem]:
     return problems
 
 
+def _dsl(args: argparse.Namespace) -> Dsl:
+    return Dsl(getattr(args, "dsl", None) or Dsl.TRITON)
+
+
+def _results(path: Path, args: argparse.Namespace) -> Path:
+    """``results/x.csv`` for Triton, ``results/x_cuda.csv`` for CUDA."""
+    dsl = _dsl(args)
+    return path if dsl is Dsl.TRITON else path.with_name(f"{path.stem}_{dsl}{path.suffix}")
+
+
+def _ledger(cache_dir: Path, gpu: str, problem: Problem) -> Path:
+    name = problem.id if problem.dsl is Dsl.TRITON else f"{problem.id}.{problem.dsl}"
+    return ledger_path(cache_dir, gpu, name)
+
+
 def _probe(runner: Runner, name: str) -> ProbeResult:
     try:
         return ProbeResult.model_validate(runner.call("probe", name=name))
@@ -686,8 +737,85 @@ def _probe(runner: Runner, name: str) -> ProbeResult:
         return ProbeResult(name=name, compiled=False, error=str(e))
 
 
+def cmd_tile_search(args: argparse.Namespace) -> int:
+    from smforge.tilesearch import GemmShape, search, unsupported
+
+    config = _llm_config(args)
+    if args.effort:
+        config.llm.efforts["tilesearch"] = args.effort
+    shapes = [GemmShape.parse(text) for text in args.shapes.split(",")]
+    for shape in shapes:
+        if reason := unsupported(shape):
+            print(f"{shape.label}: not searched: {reason}", file=sys.stderr)
+    shapes = [shape for shape in shapes if not unsupported(shape)]
+    profile = find_profile(config.hardware_dir, config.device)
+    if profile is None:
+        print("no hardware profile: run `smforge device` first", file=sys.stderr)
+        return 2
+    run = time.strftime("%Y%m%d-%H%M%S")
+    llm = create_client(config.llm, transcripts=config.cache_dir / "transcripts" / run)
+    with Runner(config) as runner:
+        stamp = provenance(runner.call("device"))
+        for shape in shapes:
+            try:
+                result = search(
+                    shape,
+                    runner,
+                    llm,
+                    profile,
+                    config.cache_dir / "runs" / run / "tilesearch",
+                    args.rounds,
+                    args.per_round,
+                )
+            except BudgetExceeded as e:
+                print(f"{e}\nstopped at {shape.label}", file=sys.stderr)
+                return 2
+            best, fitted = result.best, result.fitted
+            print(
+                f"{shape.label}: cuBLAS {result.cublas_us:.1f} us; default "
+                f"{result.default.row}; fitted {fitted.row}",
+                flush=True,
+            )
+            if best is not None:
+                print(
+                    f"  best {best.config.label}: A/B {_fmt(result.best_us, '.1f')} us "
+                    f"({result.tflops(result.best_us):.1f} TFLOPS) against default "
+                    f"{_fmt(result.default_us, '.1f')} us ({_fmt(result.vs_default)}x) and "
+                    f"cuBLAS {_fmt(result.final_cublas_us, '.1f')} us ({_fmt(result.vs_cublas)}x)",
+                    flush=True,
+                )
+            upsert(
+                [
+                    {
+                        "shape": shape.label,
+                        "cublas_us": _fmt(result.final_cublas_us or result.cublas_us, ".2f"),
+                        "default": fitted.config.label
+                        + ("" if fitted.us else f" ({fitted.status})"),
+                        "default_us": _fmt(result.default_us or fitted.us, ".2f"),
+                        "best": best.config.label if best else "",
+                        "best_us": _fmt(result.best_us, ".2f"),
+                        "best_tflops": _fmt(result.tflops(result.best_us), ".1f"),
+                        "vs_default": _fmt(result.vs_default),
+                        "vs_cublas": _fmt(result.vs_cublas),
+                        "configs": len(result.trials),
+                        "invalid": sum(t.status == "invalid" for t in result.trials),
+                        "failed": sum(
+                            t.us is None and t.status != "invalid" for t in result.trials
+                        ),
+                        "cost_usd": f"{result.usage.cost_usd:.4f}",
+                        "model": config.llm.model,
+                        **stamp,
+                    }
+                ],
+                TILESEARCH,
+                TILESEARCH_FIELDS,
+                TILESEARCH_KEY,
+            )
+    return 0
+
+
 def cmd_kb_list(args: argparse.Namespace) -> int:
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     for c in kb.constraints:
         stages = ",".join(c.stages) or "all"
         print(f"constraint  {c.id:44s} {stages:30s} {c.check.problem}")
@@ -701,7 +829,7 @@ def cmd_kb_list(args: argparse.Namespace) -> int:
 
 def cmd_kb_show(args: argparse.Namespace) -> int:
     config = get_config()
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     profile = find_profile(config.hardware_dir, config.device)
     if profile is not None:
         kb = kb.for_device(profile)
@@ -711,7 +839,7 @@ def cmd_kb_show(args: argparse.Namespace) -> int:
 
 
 def cmd_kb_verify(args: argparse.Namespace) -> int:
-    kb = load_kb()
+    kb = load_kb(kb_dir(_dsl(args)))
     wanted = set(args.ids.split(",")) if args.ids else None
     problems = {p.id: p for p in load_problems()}
     dev = set(load_splits().get("dev", []))

@@ -1,0 +1,6 @@
+shape,cublas_us,default,default_us,best,best_us,best_tflops,vs_default,vs_cublas,configs,invalid,failed,cost_usd,model,gpu,triton,commit,date
+1024x8192x8192_float16_col,1224.70,128x256x64_w64x64x64_s2,1516.54,64x64x64_w32x32x64_s3_sw2,1167.17,117.8,1.299,1.048,18,0,0,0.0780,claude-opus-5-5,NVIDIA GeForce RTX 5080,3.6.0,286bf17,2026-11-01
+16384x32768x64_float16_row,1221.63,128x256x64_w64x64x64_s2,1200.13,64x256x32_w64x64x32_s2_sw2,1182.72,58.1,1.015,1.034,18,0,0,0.0839,claude-opus-5-5,NVIDIA GeForce RTX 5080,3.6.0,286bf17,2026-11-01
+2048x4096x8192_float16_row,1216.51,128x256x64_w64x64x64_s2,1483.78,64x64x64_w32x32x64_s4_sw4,1186.75,115.8,1.250,1.024,18,0,0,0.0803,claude-opus-5-5,NVIDIA GeForce RTX 5080,3.6.0,286bf17,2026-11-01
+256x256x524288_bfloat16_row,627.49,128x256x64_w64x64x64_s2 (failed bench-gpu),,256x128x32_w64x64x32_s3_k42,630.56,109.0,,0.995,18,0,7,0.0939,claude-opus-5-5,NVIDIA GeForce RTX 5080,3.6.0,286bf17,2026-11-01
+4096x4096x4096_float16_row,1191.94,128x256x64_w64x64x64_s2,1301.50,64x128x64_w32x64x64_s3_sw8,1183.04,116.2,1.100,1.004,18,1,0,0.0775,claude-opus-5-5,NVIDIA GeForce RTX 5080,3.6.0,286bf17,2026-11-01

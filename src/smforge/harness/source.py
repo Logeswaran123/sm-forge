@@ -1,11 +1,38 @@
-"""Source-level view of a kernel file: imports, Triton functions, the Model class."""
+"""Source-level view of a kernel file: imports, Triton functions, CUDA sources, the Model class."""
 
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass
 from functools import cached_property
 
+from smforge.models import Dsl
+
 _TRITON_DECORATORS = frozenset({"jit", "autotune", "heuristics"})
+BUILD = "smforge.cuda.build"
+
+
+@dataclass(frozen=True)
+class CudaSource:
+    """A source string passed to ``smforge.cuda.build``; ``kind`` is ``cuda`` or ``cpp``."""
+
+    kind: str
+    text: str
+    line: int
+
+    def file_line(self, offset: int) -> int:
+        """The kernel-file line of character ``offset`` in ``text``."""
+        return self.line + self.text.count("\n", 0, offset)
+
+
+@dataclass(frozen=True)
+class Extension:
+    """``name = build(cuda, cpp, functions)`` at module level."""
+
+    name: str
+    line: int
+    sources: tuple[CudaSource, ...]
+    functions: tuple[str, ...]
 
 
 class KernelSource:
@@ -43,6 +70,64 @@ class KernelSource:
 
     def calls(self, node: ast.AST) -> list[tuple[ast.Call, str | None]]:
         return [(n, self.dotted(n.func)) for n in ast.walk(node) if isinstance(n, ast.Call)]
+
+    @cached_property
+    def dsl(self) -> Dsl:
+        cuda = any(
+            p == "smforge.cuda" or p.startswith("smforge.cuda.") for p in self.aliases.values()
+        )
+        return Dsl.CUDA if cuda else Dsl.TRITON
+
+    @cached_property
+    def extensions(self) -> dict[str, Extension]:
+        """Module-level ``smforge.cuda.build`` calls whose sources are string constants."""
+        strings = {}
+        for node in self.tree.body:
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                strings[node.targets[0].id] = node.value
+        found = {}
+        for node in self.tree.body:
+            if not (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Call)
+                and self.dotted(node.value.func) == BUILD
+            ):
+                continue
+            call = node.value
+            args = dict(zip(("cuda", "cpp", "functions"), call.args, strict=False))
+            args |= {k.arg: k.value for k in call.keywords if k.arg}
+            sources = []
+            for kind in ("cuda", "cpp"):
+                value = args.get(kind)
+                if isinstance(value, ast.Name):
+                    value = strings.get(value.id)
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    sources.append(CudaSource(kind, value.value, value.lineno))
+            names = args.get("functions")
+            functions = tuple(
+                e.value
+                for e in getattr(names, "elts", [])
+                if isinstance(e, ast.Constant) and isinstance(e.value, str)
+            )
+            name = node.targets[0].id
+            found[name] = Extension(name, node.lineno, tuple(sources), functions)
+        return found
+
+    def cuda_sources(self, kind: str | None = None) -> list[CudaSource]:
+        return [
+            source
+            for extension in self.extensions.values()
+            for source in extension.sources
+            if kind is None or source.kind == kind
+        ]
 
     @cached_property
     def functions(self) -> dict[str, ast.FunctionDef]:

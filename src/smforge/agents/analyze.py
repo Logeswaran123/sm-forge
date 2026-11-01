@@ -76,7 +76,7 @@ def measure(runner: Runner, kernel: Path, problem: Problem, ncu: bool = True) ->
     counters = None
     if ncu:
         try:
-            names = {k.name for k in facts.kernels}
+            names = {k.symbol or k.name for k in facts.kernels}
             counters = profile_ncu(kernel, names, **args) if names else []
         except NcuError as e:
             status = tool_status("ncu")
@@ -108,7 +108,8 @@ def pre_analyze(
             )
         if dots and not k.mma:
             add(IssueType.NO_TENSOR_CORE_MMA, "tl.dot compiled without MMA instructions", k.name)
-        if dots and k.num_stages <= 1 and "LDGSTS" not in k.instructions and k.mma:
+        stages = k.num_stages
+        if dots and stages is not None and stages <= 1 and "LDGSTS" not in k.instructions and k.mma:
             add(IssueType.MISSING_PIPELINING, "num_stages=1, no cp.async (LDGSTS) in SASS", k.name)
         if k.ctas_per_sm is not None and k.ctas_per_sm * k.num_warps < 8:
             add(

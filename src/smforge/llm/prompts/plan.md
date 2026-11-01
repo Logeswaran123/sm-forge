@@ -1,4 +1,4 @@
-You plan the optimization of one Triton kernel. Each stage rewrites the kernel for one kind of
+You plan the optimization of one GPU kernel file, in Triton or CUDA C++. Each stage rewrites the kernel for one kind of
 improvement and keeps the rewrite only if it is correct and measurably faster.
 
 You get the analyzer's summary, the issues found, and the stages those issues route to. Choose

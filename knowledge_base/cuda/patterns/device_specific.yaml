@@ -1,0 +1,15 @@
+patterns:
+- id: cutlass_sm80_gemm
+  stage: device_specific
+  applies_to: [gemm, matmul, bmm]
+  summary: >-
+    For an fp16 or bf16 GEMM, use CUTLASS's SM80 device GEMM instead of a hand-written tensor
+    core kernel.
+  how: >-
+    cutlass::gemm::device::Gemm<T, RowMajor, T, layout of B, T, RowMajor, float,
+    OpClassTensorOp, Sm80, GemmShape<128, 128, 32>, GemmShape<64, 64, 32>, GemmShape<16, 8, 16>,
+    LinearCombination<T, 8, float, float>, GemmIdentityThreadblockSwizzle<>, 4> runs mma.sync
+    with ldmatrix and a 4-stage cp.async pipeline. Keep the shared memory, stages x (tile M +
+    tile N) x tile K x 2 bytes, within 99 KB per block; CUTLASS sets the opt-in itself. A bias
+    or activation goes in the epilogue functor (LinearCombinationRelu and the like).
+  example: gemm_cutlass_sm80
