@@ -43,8 +43,11 @@ $issues
 5. Interleaved timing on `bench-gpu` against `t0`. A trial is faster only by more than
    $min_effect; within that it is parity.
 
-At the end the best trial that is faster than `t0` also has to pass compute-sanitizer memcheck
-on `ci`.
+At the end the best trial that is faster than `t0` is finalized only if it passes
+compute-sanitizer memcheck on `ci` and is still faster than `t0` in three more A/B runs, each in
+a fresh process, the slowest counting; otherwise the next best trial is tried. A forward that
+launches many short kernels is timed with the host's launch speed, which on this machine drops
+for seconds at a time, so it can win one A/B and lose the next. Fewer, larger launches hold up.
 
 ## Commands
 
