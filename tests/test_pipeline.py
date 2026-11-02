@@ -344,3 +344,15 @@ def test_run_pipeline(monkeypatch, tmp_path):
     assert record["summary"] == "tiles are too small"
     assert [m["ok"] for m in record["memcheck"]] == ([True] if memcheck else [])
     assert (tmp_path / "w" / "output.py").read_text() == good
+
+
+def test_finalize_without_rollback(tmp_path):
+    problem = copy_problem(tmp_path)
+    slower = tmp_path / "slower.py"
+    stages = [StageResult(problem.id, Stage.FUSION, True, slower, 20, 25)]
+    result = PipelineResult(problem.id, "", [], "", [], stages, 20, 20, problem.seed)
+    finalize(result, problem, Compare(0.9), memcheck=False)
+    assert result.kernel == problem.seed and result.final_us == result.seed_us
+    finalize(result, problem, Compare(0.9), memcheck=False, rollback=False)
+    assert result.kernel == slower and result.ab == [0.9]
+    assert result.speedup == pytest.approx(0.9)

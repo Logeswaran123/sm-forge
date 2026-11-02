@@ -139,8 +139,10 @@ def check_candidate(
     base: Base,
     path: Path,
     sanitize_failures: bool = False,
+    facts: bool = True,
 ) -> Outcome:
-    """``sanitize_failures`` adds compute-sanitizer findings to a crash or a mismatch."""
+    """``sanitize_failures`` adds compute-sanitizer findings to a crash or a mismatch;
+    ``facts`` False leaves the per-kernel fact deltas out of a slower candidate's feedback."""
     code = path.read_text()
     issues = validate_source(code)
     if not any(issue.check == "syntax_error" for issue in issues):
@@ -179,16 +181,16 @@ def check_candidate(
     comparison = runner.compare(base.path, path, spec=problem.spec, variant=TIMED_VARIANT)
     if comparison.verdict is Verdict.FASTER:
         return Outcome("accepted", f"Accepted: {render.comparison(comparison)}", comparison)
+    text = f"Correct but not faster: {render.comparison(comparison)}"
+    if not facts:
+        return Outcome(str(comparison.verdict), text, comparison)
     try:
         deltas = render.fact_deltas(
             base.facts, runner.facts(path, spec=problem.spec, variant=TIMED_VARIANT)
         )
     except WorkerError as e:
         deltas = f"unavailable: {e}"
-    text = (
-        f"Correct but not faster: {render.comparison(comparison)}\n\n"
-        f"Kernel changes from the current kernel:\n{deltas}"
-    )
+    text += f"\n\nKernel changes from the current kernel:\n{deltas}"
     return Outcome(str(comparison.verdict), text, comparison)
 
 

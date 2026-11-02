@@ -21,7 +21,7 @@ from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
 from smforge.llm.client import Completer, Usage
 from smforge.llm.prompting import fill, stage_text
-from smforge.models import DeviceProfile, Dsl, Stage
+from smforge.models import Comparison, DeviceProfile, Dsl, Stage
 from smforge.spec import load_spec
 
 
@@ -82,8 +82,13 @@ def optimize_stage(
     notes: str | None = None,
     measured: Measurements | None = None,
     sanitize_failures: bool = False,
+    rollback: bool = True,
 ) -> StageResult:
-    """Run one stage from ``kernel``; ``measured`` reuses measurements of it already taken."""
+    """Run one stage from ``kernel``; ``measured`` reuses measurements of it already taken.
+
+    With ``rollback`` False (an ablation), a stage that finds no faster candidate keeps its
+    fastest correct one anyway. Fact deltas reach the LLM only when ``measured.shown``.
+    """
     spec = load_spec(problem.spec)
     workdir.mkdir(parents=True, exist_ok=True)
     if measured is None:
@@ -111,13 +116,18 @@ def optimize_stage(
     system = system_prompt(stage, profile, knowledge, min_effect, problem.dsl)
     result = StageResult(problem.id, stage, False, kernel, timing.time_us, timing.time_us)
     candidates: dict[int, Candidate] = {}
+    fallback: list[tuple[Path, Comparison]] = []
 
     def verify(code: str, attempt: int) -> tuple[bool, str]:
         path = workdir / f"attempt-{attempt}.py"
         path.write_text(code)
-        outcome = check_candidate(runner, problem, spec, base, path, sanitize_failures)
+        outcome = check_candidate(
+            runner, problem, spec, base, path, sanitize_failures, measured.shown
+        )
         comparison = outcome.comparison
         speedup = comparison.speedup if comparison else None
+        if outcome.correct and outcome.kind != "accepted":
+            fallback.append((path, comparison))
         candidates[attempt] = Candidate(
             attempt, outcome.kind, outcome.feedback.splitlines()[0], speedup
         )
@@ -131,6 +141,10 @@ def optimize_stage(
 
     run = cover(llm, system, task, verify, max_iters, role="optimizer", keep=keep)
     result.usage = run.usage
+    if not rollback and not result.accepted and fallback:
+        path, comparison = max(fallback, key=lambda pair: pair[1].speedup)
+        result.accepted, result.kernel = True, path
+        result.input_us, result.output_us = comparison.baseline_us, comparison.candidate_us
     result.attempts = [
         candidates.get(i) or Candidate(i, "no_code", NO_CODE) for i in range(len(run.attempts))
     ]

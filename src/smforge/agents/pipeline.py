@@ -7,6 +7,8 @@ new measurements and the analyzer's issues carry over. At the end the last accep
 under compute-sanitizer memcheck on ``ci`` and is compared with the seed in several fresh
 workers; one that fails either gives way to the stage output before it, and the seed is kept when
 none passes, so no regression is finalized.
+
+``Options`` turns parts of this off for the ablations.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from pathlib import Path
 from smforge import lessons
 from smforge.agents.analyze import (
     TIMED_VARIANT,
+    Measurements,
     analyze,
     issues_text,
     measure,
@@ -35,6 +38,23 @@ from smforge.models import DeviceProfile, Issue, SanitizerReport, Stage
 from smforge.spec import load_spec
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Options:
+    """What the pipeline does, all on by default. Each off is one ablation.
+
+    ``facts``: per-kernel facts, launches and counters in the prompts, the fact-backed issues,
+    and fact deltas in feedback (off: the LLM sees the timing and the code). ``reanalysis``:
+    measure again and recompute the fact-backed issues after an accepted stage (off: every stage
+    works from the seed's measurements). ``rollback``: keep a stage's output only if it beats the
+    stage input, and never finalize a kernel slower than the seed (off: a stage keeps its fastest
+    correct candidate, and the last stage's output is final if memcheck passes).
+    """
+
+    facts: bool = True
+    reanalysis: bool = True
+    rollback: bool = True
 
 
 @dataclass
@@ -70,9 +90,11 @@ def run_pipeline(
     ncu: bool = True,
     memcheck: bool = True,
     ledger: Path | None = None,
+    options: Options | None = None,
 ) -> PipelineResult:
     """``ledger``, the problem's lessons file on this GPU, is read into each stage's prompt
     and gets a line for every candidate."""
+    options = options or Options()
     workdir.mkdir(parents=True, exist_ok=True)
     past = lessons.read(ledger)
     if ledger is not None:
@@ -80,8 +102,8 @@ def run_pipeline(
     spec = load_spec(problem.spec)
     dtype = spec.dtype(spec.variant(TIMED_VARIANT))
     kernel = problem.seed
-    measured = measure(runner, kernel, problem, ncu)
-    found = pre_analyze(kernel.read_text(), measured, dtype, profile)
+    measured = _measure(runner, kernel, problem, ncu, options)
+    found = pre_analyze(kernel.read_text(), measured, dtype, profile) if options.facts else []
     usage = Usage()
     try:
         summary, issues, used = analyze(llm, problem, kernel.read_text(), measured, found, profile)
@@ -125,6 +147,7 @@ def run_pipeline(
             notes,
             measured,
             memcheck,
+            options.rollback,
         )
         result.stages.append(stage_result)
         result.usage.add(stage_result.usage)
@@ -137,10 +160,12 @@ def run_pipeline(
                 )
         if stage_result.accepted:
             kernel = stage_result.kernel
-            measured = measure(runner, kernel, problem, ncu)
-            found = pre_analyze(kernel.read_text(), measured, dtype, profile)
-            issues = found + [i for i in issues if i.source == "llm"]
-    finalize(result, problem, runner, memcheck)
+            if options.reanalysis:
+                measured = _measure(runner, kernel, problem, ncu, options)
+                if options.facts:
+                    found = pre_analyze(kernel.read_text(), measured, dtype, profile)
+                issues = found + [i for i in issues if i.source == "llm"]
+    finalize(result, problem, runner, memcheck, options.rollback)
     if ledger is not None:
         kept = "the seed" if result.kernel == problem.seed else "the last clean accepted kernel"
         lessons.add(ledger, f"final: {result.speedup:.2f}x over the seed, kept {kept}")
@@ -149,11 +174,14 @@ def run_pipeline(
     return result
 
 
-def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck: bool) -> None:
+def finalize(
+    result: PipelineResult, problem: Problem, runner: Runner, memcheck: bool, rollback: bool = True
+) -> None:
     """Keep the last accepted kernel that passes memcheck and beats the seed in every A/B run.
 
     Accepted kernels are tried from the last stage back (``confirm``: memcheck on ``ci``, then
-    the A/B in fresh workers, the slowest counting). The seed is kept when none passes.
+    the A/B in fresh workers, the slowest counting). The seed is kept when none passes. Without
+    ``rollback`` a kernel that passes memcheck is kept however its A/B runs come out.
     """
     for stage in reversed([s for s in result.stages if s.accepted]):
         check = confirm(runner, problem, problem.seed, stage.kernel, memcheck)
@@ -161,7 +189,8 @@ def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck:
             result.memcheck.append((stage.stage, check.memcheck))
         if check.comparisons:
             result.seed_us = check.worst.baseline_us
-        if check.ok:
+        clean = check.memcheck is None or check.memcheck.ok
+        if check.ok or (not rollback and clean and check.comparisons):
             result.kernel, result.final_us = stage.kernel, check.worst.candidate_us
             result.ab = [c.speedup for c in check.comparisons]
             if check.unstable:
@@ -175,6 +204,14 @@ def finalize(result: PipelineResult, problem: Problem, runner: Runner, memcheck:
             return
         log.warning("%s: the %s output is not kept: %s", problem.id, stage.stage, check.reason())
     result.final_us = result.seed_us
+
+
+def _measure(
+    runner: Runner, kernel: Path, problem: Problem, ncu: bool, options: Options
+) -> Measurements:
+    measured = measure(runner, kernel, problem, ncu and options.facts)
+    measured.shown = options.facts
+    return measured
 
 
 def memcheck_summary(result: PipelineResult) -> str:
