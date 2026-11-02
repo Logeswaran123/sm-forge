@@ -150,8 +150,9 @@ def check_kernel(
     atol: float,
     draws: int,
     cache: ReferenceCache,
+    first_draw: int = 0,
 ) -> CheckResult:
-    """Run oracle and candidate on ``draws`` input draws in one process.
+    """Run oracle and candidate on ``draws`` input draws from ``first_draw``, in one process.
 
     The candidate model is built once, so a module that caches its first output fails the
     second draw. After the draws pass, every config of each autotuned kernel is forced in turn
@@ -175,20 +176,20 @@ def check_kernel(
     )
     key = digest.hexdigest()[:24]
     diffs: list[OutputDiff] = []
-    for draw in range(draws):
+    for draw in range(first_draw, first_draw + draws):
         inputs = workload.inputs(draw)
         expected = cache.get(f"{key}-{draw}", partial(_run, reference, inputs, upcast))
         actual = _run(model, inputs)
         torch.cuda.synchronize()
         diffs, error = compare_outputs(expected, actual, rtol, atol)
         if error or any(d.mismatched for d in diffs):
-            return result(passed=False, draws=draw + 1, diffs=diffs, error=error)
+            return result(passed=False, draws=draw - first_draw + 1, diffs=diffs, error=error)
     tuners = autotuners(candidate_module)
     if tuners:
         # Draw 0 is rebuilt, not kept: holding its tensors through the draws moves the
         # allocator's layout, and an unmasked tail store then lands outside every compared tensor.
-        inputs = workload.inputs(0)
-        expected = cache.get(f"{key}-0", partial(_run, reference, inputs, upcast))
+        inputs = workload.inputs(first_draw)
+        expected = cache.get(f"{key}-{first_draw}", partial(_run, reference, inputs, upcast))
     for name, tuner in tuners.items():
         failure = _check_configs(name, tuner, model, inputs, expected, rtol, atol)
         if failure is not None:
