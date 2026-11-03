@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import shutil
 import subprocess
@@ -49,7 +50,7 @@ from smforge.device.tools import check_tools, tool_status
 from smforge.harness.ncu import NcuUnavailable
 from smforge.harness.runner import Runner, WorkerError
 from smforge.harness.sanitizer import SanitizerUnavailable
-from smforge.kb.loader import TOKEN_BUDGET, kb_dir, load_kb, record_measurement
+from smforge.kb.loader import TOKEN_BUDGET, KnowledgeBase, kb_dir, load_kb, record_measurement
 from smforge.kb.verify import Outcome, verify_constraint, verify_example
 from smforge.lessons import ledger_path
 from smforge.llm.claude_code import ClaudeCodeError
@@ -219,6 +220,42 @@ def build_parser() -> argparse.ArgumentParser:
     tiles.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
     tiles.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
     tiles.set_defaults(func=cmd_tile_search)
+
+    evaluation = commands.add_parser(
+        "eval", help="the pipeline over a split with one fixed config, and its report (stage 8)"
+    )
+    eval_commands = evaluation.add_subparsers(dest="eval_command", required=True)
+    eval_run = eval_commands.add_parser("run", help="run and measure; resumes where it stopped")
+    eval_run.add_argument("--name", required=True, help="the run's directory under results/eval/")
+    eval_run.add_argument("--split", choices=("dev", "eval"), default="eval")
+    eval_run.add_argument("--ids", help="comma-separated problem ids (instead of the whole split)")
+    eval_run.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
+    eval_run.add_argument("--max-iters", type=int, default=2, help="candidates per stage (T)")
+    eval_run.add_argument("--max-stages", type=int, default=2, help="stages besides autotuning")
+    eval_run.add_argument("--best-of", type=int, default=1, help="pipeline runs, fastest kept")
+    eval_run.add_argument("--model", help="LLM model")
+    eval_run.add_argument("--effort", default="medium", help="optimizer effort")
+    eval_run.add_argument("--keep", type=int, default=2, help="earlier attempts kept in context")
+    for flag, text in (
+        ("--no-kb", "no knowledge base in the prompts"),
+        ("--no-arch-gating", "knowledge base entries for every GPU"),
+        ("--no-facts", "prompts show the timing only"),
+        ("--no-reanalysis", "no re-measurement after an accepted stage"),
+        ("--no-rollback", "keep slower stage outputs"),
+        ("--no-ncu", "no Nsight Compute counters"),
+        ("--no-memcheck", "finalize without compute-sanitizer memcheck"),
+    ):
+        eval_run.add_argument(flag, action="store_true", help=text)
+    eval_run.add_argument("--budget-usd", type=float, help="stop once the run has spent this much")
+    eval_run.add_argument("--backend", choices=("api", "claude-code"), help="LLM backend")
+    eval_run.add_argument("--claude-bin", help="Claude Code binary for --backend claude-code")
+    eval_run.set_defaults(func=cmd_eval_run)
+    eval_report = eval_commands.add_parser("report", help="Markdown tables for one or more runs")
+    eval_report.add_argument(
+        "--runs", required=True, help="comma-separated run names; the first is the baseline"
+    )
+    eval_report.add_argument("--output", type=Path, help="write here instead of printing")
+    eval_report.set_defaults(func=cmd_eval_report)
 
     kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
@@ -811,6 +848,109 @@ def cmd_tile_search(args: argparse.Namespace) -> int:
                 TILESEARCH_FIELDS,
                 TILESEARCH_KEY,
             )
+    return 0
+
+
+EVAL_DIR = Path("results") / "eval"
+
+
+def cmd_eval_run(args: argparse.Namespace) -> int:
+    from smforge.evaluation import RunConfig, evaluate, save, summarize
+
+    if args.ids:
+        args.split = None
+    config = _llm_config(args)
+    if args.model:
+        config.llm.model = args.model
+    config.llm.efforts["optimizer"] = args.effort
+    run = RunConfig(
+        split=None if args.ids else args.split,
+        dsl=args.dsl,
+        model=config.llm.model,
+        effort=args.effort,
+        max_iters=args.max_iters,
+        max_stages=args.max_stages,
+        best_of=args.best_of,
+        kb=not args.no_kb,
+        arch_gating=not args.no_arch_gating,
+        facts=not args.no_facts,
+        reanalysis=not args.no_reanalysis,
+        rollback=not args.no_rollback,
+        ncu=not args.no_ncu and _tool_ok("ncu", "running without counters"),
+        memcheck=not args.no_memcheck and _tool_ok("compute-sanitizer", "finals unchecked"),
+    )
+    run_dir = EVAL_DIR / args.name
+    config_file = run_dir / "config.json"
+    if config_file.exists():
+        if RunConfig.model_validate_json(config_file.read_text()) != run:
+            print(f"{run_dir} was run with another config; use another --name", file=sys.stderr)
+            return 2
+    run_dir.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(run.model_dump_json(indent=1))
+    problems = [p for p in _select(load_problems(), args) if p.seed.exists()]
+    todo = [p for p in problems if not (run_dir / f"{p.id}.json").exists()]
+    print(f"{args.name}: {len(problems) - len(todo)} of {len(problems)} done", flush=True)
+    profile = find_profile(config.hardware_dir, config.device)
+    kb = load_kb(kb_dir(_dsl(args))) if run.kb else KnowledgeBase(kb_dir(_dsl(args)))
+    if profile is not None and run.arch_gating:
+        kb = kb.for_device(profile)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    llm = create_client(config.llm, transcripts=config.cache_dir / "transcripts" / stamp)
+    with Runner(config) as runner:
+        (run_dir / "device.json").write_text(
+            json.dumps(provenance(runner.call("device")), indent=1)
+        )
+        for problem in todo:
+            workdir = config.cache_dir / "runs" / stamp / args.name / problem.id
+            try:
+                result = evaluate(problem, runner, llm, kb, profile, run, workdir, args.keep)
+            except BudgetExceeded as e:
+                print(f"stopping: {e}; rerun the same command to resume", flush=True)
+                break
+            except (MissingCredentials, ClaudeCodeError, NcuUnavailable, SanitizerUnavailable) as e:
+                print(f"{e}\nstopped at {problem.id}; rerun to resume", file=sys.stderr)
+                return 2
+            except (Refused, ReplayMiss, WorkerError) as e:
+                print(f"{problem.id}: FAILED: {str(e).splitlines()[0]}", flush=True)
+                continue
+            save(result, run_dir)
+            held = [f"{k} {v}" for k, v in result.correctness.items() if v != "pass"]
+            print(
+                f"{problem.id}: {result.speedup:.2f}x over the seed"
+                + (f", {s:.2f}x over eager" if (s := result.over("eager")) else "")
+                + f", held-out {', '.join(held) or 'pass'}, ${result.llm.cost_usd:.2f}, "
+                f"{result.wall_s / 60:.1f} min",
+                flush=True,
+            )
+    from smforge.evaluation import load_run
+
+    _, done = load_run(run_dir)
+    summary = summarize(done, config.timing.min_effect)
+    (run_dir / "summary.json").write_text(json.dumps(summary, indent=1))
+    print(
+        f"{args.name}: {summary['problems']} problems, {summary['improved']} improved, "
+        f"{summary['regressions']} regressions, geomean {summary['geomean_over_seed'] or 0:.2f}x "
+        "over the seed",
+        flush=True,
+    )
+    return 0
+
+
+def cmd_eval_report(args: argparse.Namespace) -> int:
+    from smforge.evaluation import report
+
+    names = args.runs.split(",")
+    missing = [n for n in names if not (EVAL_DIR / n / "config.json").exists()]
+    if missing:
+        print(f"no run: {', '.join(missing)}", file=sys.stderr)
+        return 2
+    text = report({name: EVAL_DIR / name for name in names})
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(text)
+        print(f"wrote {args.output}")
+    else:
+        print(text, end="")
     return 0
 
 
