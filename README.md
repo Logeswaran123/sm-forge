@@ -131,6 +131,7 @@ else below.
 | tune CUTLASS GEMM tiles | `smforge tile-search --shapes 4096x4096x4096` | [tile search](docs/tile-search.md) |
 | write starting kernels, measure baselines | `smforge seed`, `smforge corpus baselines` | [corpus](docs/corpus.md) |
 | inspect or verify the knowledge base | `smforge kb list / show / verify` | [knowledge base](docs/knowledge-base.md) |
+| evaluate a split, compare configs | `smforge eval run / report` | [evaluation](docs/evaluation.md) |
 
 To work on your own kernel, see [bring your own kernel](docs/examples.md#6-bring-your-own-kernel).
 
@@ -160,6 +161,7 @@ ruff check .
 - [Tile search](docs/tile-search.md): CUTLASS GEMM configs against cuBLAS.
 - [Corpus](docs/corpus.md): the problems, starting kernels and baselines.
 - [Knowledge base](docs/knowledge-base.md): constraints, patterns and how they are verified.
+- [Evaluation](docs/evaluation.md): eval runs, held-out checks and ablations.
 - [Profiling tools](docs/profiling-tools.md): ncu, nsys and compute-sanitizer setup, WSL2 included.
 - [Configuration](docs/configuration.md): `.env` settings and where output goes.
 - [PLAN.md](PLAN.md): design notes and measured results.
