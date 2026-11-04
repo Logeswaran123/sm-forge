@@ -11,8 +11,9 @@ and then measures the final kernel past what the pipeline checked:
 - speedups over eager PyTorch, ``torch.compile`` and ``torch.compile`` max-autotune, from the
   baseline table;
 - the fraction of the roofline: the time the measured peaks allow for the spec's FLOPs and bytes,
-  over the final time. Above 1 means the kernel does less work than the reference's FLOP count,
-  not that it beats the hardware;
+  over the final time. The peaks are measured, not the hardware's limits, and a good GEMM can run
+  a few percent above them. Above ``ABOVE_ROOF`` the kernel does less work than the reference's
+  FLOP count.
 - LLM calls, tokens, the cache-hit share of input tokens, dollars and wall time.
 
 Each problem's result is one JSON file in the run's directory, with the run's config beside it;
@@ -40,6 +41,7 @@ from smforge.spec import load_spec
 
 FRESH_DRAW = 1000
 HELD_OUT = "kernelbench"
+ABOVE_ROOF = 1.15
 BASELINES = ("eager", "compile", "max-autotune")
 
 
@@ -294,7 +296,9 @@ def summarize(problems: list[ProblemEval], min_effect: float = 0.02) -> dict:
         },
         "correctness": checks,
         "median_roofline_fraction": statistics.median(fractions) if fractions else None,
-        "above_roofline": sorted(p.problem for p in problems if (p.roofline_fraction or 0) > 1),
+        "above_roofline": sorted(
+            p.problem for p in problems if (p.roofline_fraction or 0) > ABOVE_ROOF
+        ),
         "llm": {
             **use.model_dump(),
             "cache_hit_share": use.cache_hit_share,

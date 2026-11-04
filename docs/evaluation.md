@@ -30,7 +30,7 @@ runs on the same problems cannot leak into the results.
 | kernel-only speedup | the summed kernel time of one forward, seed against final, from the profiler |
 | speedup over eager, `torch.compile`, max-autotune | the final time against the times in `results/baselines.csv` |
 | held-out correctness | `ci` and `bench-gpu` on input draws 1000 and up (optimization uses draws 0 and 1), and the problem's original KernelBench shapes at the timed dtype, which no check during optimization saw |
-| roofline fraction | the time the measured matmul peak and DRAM bandwidth allow for the spec's FLOPs and bytes, over the final time. Above 1 means the kernel does less work than the reference's FLOP count. |
+| roofline fraction | the time the measured matmul peak and DRAM bandwidth allow for the spec's FLOPs and bytes, over the final time. The peaks are measured, so a good GEMM can sit a few percent above 1. Above 1.15 means the kernel does less work than the reference's FLOP count. |
 | LLM use | calls, input, output and cached tokens, the cache-hit share, dollars at list price |
 | wall time | per problem, all pipeline runs and measurements included |
 

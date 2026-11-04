@@ -46,18 +46,19 @@ def problem_eval(name: str, seed: float, final: float, **kw) -> ProblemEval:
 def test_summarize():
     problems = [
         problem_eval("a", 100, 50, seed_kernel_us=90, final_kernel_us=30, roofline_us=60),
+        problem_eval("d", 100, 100, roofline_us=105),
         problem_eval("b", 100, 100),
         problem_eval("c", 100, 125, correctness={"kernelbench": "fail: 3 mismatched"}),
     ]
     s = summarize(problems)
-    assert (s["problems"], s["improved"], s["kept_seed"], s["regressions"]) == (3, 1, 1, 1)
+    assert (s["problems"], s["improved"], s["kept_seed"], s["regressions"]) == (4, 1, 2, 1)
     assert s["incorrect"] == 1 and s["correctness"] == {"kernelbench": {"fail": 1}}
-    assert s["geomean_over_seed"] == pytest.approx((2 * 1 * 0.8) ** (1 / 3))
+    assert s["geomean_over_seed"] == pytest.approx((2 * 1 * 0.8) ** (1 / 4))
     assert s["geomean_kernel_over_seed"] == pytest.approx(3)
-    assert s["geomean_over_eager"] == pytest.approx((4 * 2 * 1.6) ** (1 / 3))
+    assert s["geomean_over_eager"] == pytest.approx((4 * 2 * 1.6 * 2) ** (1 / 4))
     assert s["faster_than_compile"] == 1 and s["above_roofline"] == ["a"]
     assert s["llm"]["cache_hit_share"] == pytest.approx(0.75)
-    assert s["llm"]["cost_per_problem"] == pytest.approx(1.0)
+    assert s["llm"]["cost_per_problem"] == pytest.approx(1.0)  # "d" at 1.05x is not flagged
 
 
 def test_roofline_us():
