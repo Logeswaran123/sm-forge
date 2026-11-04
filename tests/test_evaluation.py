@@ -80,6 +80,7 @@ def test_report(tmp_path):
         run_dir = tmp_path / name
         run_dir.mkdir()
         (run_dir / "config.json").write_text(config.model_dump_json())
+        (run_dir / "device.json").write_text('{"gpu": "g"}')
         save(problem_eval("a", 100, final), run_dir)
     assert load_run(tmp_path / "base")[1][0].final_us == 50
     text = report({"base": tmp_path / "base", "nokb": tmp_path / "nokb"})

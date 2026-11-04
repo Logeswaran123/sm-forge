@@ -41,6 +41,7 @@ from smforge.spec import load_spec
 
 FRESH_DRAW = 1000
 HELD_OUT = "kernelbench"
+RUN_FILES = ("config.json", "device.json", "summary.json")
 ABOVE_ROOF = 1.15
 BASELINES = ("eager", "compile", "max-autotune")
 
@@ -248,7 +249,7 @@ def load_run(run_dir: Path) -> tuple[RunConfig, list[ProblemEval]]:
     problems = [
         ProblemEval.model_validate_json(path.read_text())
         for path in sorted(run_dir.glob("*.json"))
-        if path.name not in ("config.json", "summary.json")
+        if path.name not in RUN_FILES
     ]
     return config, problems
 
