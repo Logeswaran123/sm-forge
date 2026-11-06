@@ -33,6 +33,7 @@ from smforge.agents.planner import ROUTES, plan
 from smforge.corpus.catalog import Problem
 from smforge.harness.runner import Runner
 from smforge.kb.loader import KnowledgeBase
+from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import BudgetExceeded, Completer, Usage
 from smforge.models import DeviceProfile, Issue, SanitizerReport, Stage
 from smforge.spec import load_spec
@@ -108,7 +109,7 @@ def run_pipeline(
     try:
         summary, issues, used = analyze(llm, problem, kernel.read_text(), measured, found, profile)
         usage.add(used)
-    except BudgetExceeded:
+    except (BudgetExceeded, ClaudeCodeError):
         raise
     except Exception as e:
         log.warning("%s: analyzer failed, using fact-backed issues only: %s", problem.id, e)

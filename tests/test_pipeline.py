@@ -15,6 +15,7 @@ from smforge.device.tools import tool_status
 from smforge.harness.ncu import NcuError, NcuUnavailable
 from smforge.harness.runner import Runner
 from smforge.kb.loader import load_kb
+from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import LLMClient
 from smforge.models import (
     Comparison,
@@ -83,6 +84,13 @@ def test_plan(monkeypatch):
     monkeypatch.setattr(llm, "_send", fail)
     stages, reason, _ = plan(llm, "summary", issues)
     assert stages == routed(issues) and reason.startswith("fallback")
+
+    def limit(request):
+        raise ClaudeCodeError("You've hit your 5-hour limit")
+
+    monkeypatch.setattr(llm, "_send", limit)
+    with pytest.raises(ClaudeCodeError, match="5-hour limit"):
+        plan(llm, "summary", issues)
 
 
 def facts(**kw) -> KernelFacts:
