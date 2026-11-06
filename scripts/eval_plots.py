@@ -125,7 +125,7 @@ def roofline(run: str, output: Path) -> None:
 def speedups(run: str, output: Path) -> None:
     _, problems = load_run(EVAL_DIR / run)
     ranked = sorted(problems, key=lambda p: p.speedup, reverse=True)
-    fig, ax = _axes((max(8, len(ranked) * 0.28), 5))
+    fig, ax = _axes((max(8, len(ranked) * 0.28), 6))
     color = SERIES["final"][0]
     ax.bar(
         range(len(ranked)),
@@ -140,7 +140,7 @@ def speedups(run: str, output: Path) -> None:
     values = [p.speedup for p in ranked]
     if values and max(values) / min(values) >= 3:
         ax.set_yscale("log")
-        ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 3.0, 5.0, 7.0)))
+        ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 3.0)))
         ax.yaxis.set_minor_locator(LogLocator(base=10, subs=()))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}x"))
     ax.set_xticks(
