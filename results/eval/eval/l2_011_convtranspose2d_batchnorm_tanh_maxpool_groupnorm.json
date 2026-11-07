@@ -1,0 +1,47 @@
+{
+ "problem": "l2_011_convtranspose2d_batchnorm_tanh_maxpool_groupnorm",
+ "family": "convtranspose2d",
+ "seed_us": 46096.031188964844,
+ "final_us": 13208.54377746582,
+ "ab": [
+  3.5012476651583344,
+  3.491211994833619,
+  3.4898647394882456
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "runs": [
+  3.4898647394882456
+ ],
+ "baselines_us": {
+  "compile": 9483.55,
+  "eager": 6810.62,
+  "max-autotune": 9683.14
+ },
+ "seed_kernel_us": 43977.79133333335,
+ "final_kernel_us": 12690.452333333335,
+ "roofline_us": 5675.650015473366,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 25400,
+  "cache_read_tokens": 7628,
+  "cache_write_tokens": 41075,
+  "cost_usd": 0.8417475999999999
+ },
+ "wall_s": 409.33390018000136
+}

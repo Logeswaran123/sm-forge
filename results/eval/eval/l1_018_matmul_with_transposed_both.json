@@ -1,0 +1,45 @@
+{
+ "problem": "l1_018_matmul_with_transposed_both",
+ "family": "matmul",
+ "seed_us": 1317.8880214691162,
+ "final_us": 1231.5839529037476,
+ "ab": [
+  1.0707186784436789,
+  1.072304499378795,
+  1.0700756682984434
+ ],
+ "kept_seed": false,
+ "plan": [
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "runs": [
+  1.0700756682984434
+ ],
+ "baselines_us": {
+  "compile": 1171.46,
+  "eager": 1171.46,
+  "max-autotune": 1166.4
+ },
+ "seed_kernel_us": 1187.3936666666666,
+ "final_kernel_us": 1202.4529999999995,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 12,
+  "output_tokens": 23805,
+  "cache_read_tokens": 20159,
+  "cache_write_tokens": 20273,
+  "cost_usd": 0.8088424
+ },
+ "wall_s": 255.910770513
+}

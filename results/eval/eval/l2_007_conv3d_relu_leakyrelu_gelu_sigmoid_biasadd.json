@@ -1,0 +1,46 @@
+{
+ "problem": "l2_007_conv3d_relu_leakyrelu_gelu_sigmoid_biasadd",
+ "family": "conv3d",
+ "seed_us": 2155.679941177368,
+ "final_us": 1308.7040185928345,
+ "ab": [
+  1.6486382031453737,
+  1.647186766871269,
+  1.6568036177559275
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "memory_access"
+ ],
+ "runs": [
+  1.647186766871269
+ ],
+ "baselines_us": {
+  "compile": 1991.52,
+  "eager": 4935.74,
+  "max-autotune": 1422.3
+ },
+ "seed_kernel_us": 1971.2626666666674,
+ "final_kernel_us": 1185.3553333333334,
+ "roofline_us": 438.9958539456984,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 28856,
+  "cache_read_tokens": 27561,
+  "cache_write_tokens": 24851,
+  "cost_usd": 0.9153789
+ },
+ "wall_s": 331.34965605899924
+}

@@ -1,0 +1,46 @@
+{
+ "problem": "l1_023_softmax",
+ "family": "activation",
+ "seed_us": 2889.983892440796,
+ "final_us": 2011.552095413208,
+ "ab": [
+  1.436693535817745,
+  1.4377199745069562,
+  1.4390547297646263
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.436693535817745
+ ],
+ "baselines_us": {
+  "compile": 2906.14,
+  "eager": 3719.49,
+  "max-autotune": 2604.93
+ },
+ "seed_kernel_us": 2696.5879999999997,
+ "final_kernel_us": 1832.6599999999999,
+ "roofline_us": 1818.9600706100464,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 23160,
+  "cache_read_tokens": 21574,
+  "cache_write_tokens": 23855,
+  "cost_usd": 0.7822827000000001
+ },
+ "wall_s": 358.6042274049996
+}

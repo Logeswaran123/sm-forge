@@ -1,0 +1,38 @@
+{
+ "problem": "l1_004_matrix_vector_multiplication",
+ "family": "matmul",
+ "seed_us": 2395.20001411438,
+ "final_us": 2395.20001411438,
+ "ab": [],
+ "kept_seed": true,
+ "plan": [
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [],
+ "runs": [
+  1.0
+ ],
+ "baselines_us": {
+  "compile": 2367.04,
+  "eager": 2367.3,
+  "max-autotune": 2354.43
+ },
+ "seed_kernel_us": 2558.458333333333,
+ "final_kernel_us": 2364.1753333333327,
+ "roofline_us": 2427.6508446660046,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 16,
+  "output_tokens": 13639,
+  "cache_read_tokens": 30418,
+  "cache_write_tokens": 19438,
+  "cost_usd": 0.6376850000000001
+ },
+ "wall_s": 179.3815356820005
+}

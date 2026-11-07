@@ -1,0 +1,45 @@
+{
+ "problem": "l2_083_conv3d_groupnorm_min_clamp_dropout",
+ "family": "conv3d",
+ "seed_us": 1103.5840511322021,
+ "final_us": 102.4319976568222,
+ "ab": [
+  10.776945037855892,
+  10.773821426675076,
+  10.776945037855892
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  10.773821426675076
+ ],
+ "baselines_us": {
+  "compile": 2454.85,
+  "eager": 3526.82,
+  "max-autotune": 815.1
+ },
+ "seed_kernel_us": 1126.9616666666668,
+ "final_kernel_us": 108.10533333333342,
+ "roofline_us": 152.89678432807818,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 9353,
+  "cache_read_tokens": 38659,
+  "cache_write_tokens": 23047,
+  "cost_usd": 0.49227129999999997
+ },
+ "wall_s": 146.22994548000042
+}

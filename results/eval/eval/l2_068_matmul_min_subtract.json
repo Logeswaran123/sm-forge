@@ -1,0 +1,45 @@
+{
+ "problem": "l2_068_matmul_min_subtract",
+ "family": "matmul",
+ "seed_us": 794.6239709854126,
+ "final_us": 728.0319929122925,
+ "ab": [
+  1.0929577173808158,
+  1.0914684776512873,
+  1.0990098276262934
+ ],
+ "kept_seed": false,
+ "plan": [
+  "persistent_kernel",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "accepted": [
+  "tensor_descriptors"
+ ],
+ "runs": [
+  1.0914684776512873
+ ],
+ "baselines_us": {
+  "compile": 887.17,
+  "eager": 900.9,
+  "max-autotune": 735.23
+ },
+ "seed_kernel_us": 804.9556666666666,
+ "final_kernel_us": 731.0236666666666,
+ "roofline_us": 615.8307830005349,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 33540,
+  "cache_read_tokens": 35607,
+  "cache_write_tokens": 28954,
+  "cost_usd": 1.2219248
+ },
+ "wall_s": 449.5032425160002
+}

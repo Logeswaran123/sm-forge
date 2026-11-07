@@ -1,0 +1,46 @@
+{
+ "problem": "l2_044_convtranspose2d_multiply_globalavgpool_globalavgpool_mean",
+ "family": "convtranspose2d",
+ "seed_us": 94.24000233411789,
+ "final_us": 51.19999870657921,
+ "ab": [
+  1.840625092086341,
+  1.840625092086341,
+  1.840625092086341
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "fusion",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "autotuning"
+ ],
+ "runs": [
+  1.840625092086341
+ ],
+ "baselines_us": {
+  "compile": 868.32,
+  "eager": 2920.9,
+  "max-autotune": 864.32
+ },
+ "seed_kernel_us": 77.57333333333327,
+ "final_kernel_us": 26.507000000000062,
+ "roofline_us": 332.63998478651047,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 33211,
+  "cache_read_tokens": 26689,
+  "cache_write_tokens": 42857,
+  "cost_usd": 1.3682069000000001
+ },
+ "wall_s": 367.62252441799865
+}

@@ -1,0 +1,47 @@
+{
+ "problem": "l2_078_convtranspose3d_max_max_sum",
+ "family": "convtranspose3d",
+ "seed_us": 3168.351888656616,
+ "final_us": 1266.7839527130127,
+ "ab": [
+  2.5027681415209173,
+  2.501136506142759,
+  2.5010988510480443
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "runs": [
+  2.5010988510480443
+ ],
+ "baselines_us": {
+  "compile": 3178.72,
+  "eager": 3426.08,
+  "max-autotune": 3169.15
+ },
+ "seed_kernel_us": 3232.9633333333327,
+ "final_kernel_us": 1296.5896666666665,
+ "roofline_us": 1154.9999471753836,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 33963,
+  "cache_read_tokens": 15704,
+  "cache_write_tokens": 25061,
+  "cost_usd": 0.8862131
+ },
+ "wall_s": 406.39051402799987
+}

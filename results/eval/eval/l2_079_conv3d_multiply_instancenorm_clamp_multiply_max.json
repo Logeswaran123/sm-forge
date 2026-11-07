@@ -1,0 +1,47 @@
+{
+ "problem": "l2_079_conv3d_multiply_instancenorm_clamp_multiply_max",
+ "family": "conv3d",
+ "seed_us": 864.9920225143433,
+ "final_us": 151.5520066022873,
+ "ab": [
+  5.7075590215331955,
+  5.714526635558999,
+  5.713289597443536
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "fusion",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "fusion",
+  "autotuning"
+ ],
+ "runs": [
+  5.7075590215331955
+ ],
+ "baselines_us": {
+  "compile": 1038.4,
+  "eager": 1693.73,
+  "max-autotune": 279.58
+ },
+ "seed_kernel_us": 875.7029999999996,
+ "final_kernel_us": 149.70066666666656,
+ "roofline_us": 35.97390582541493,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 21427,
+  "cache_read_tokens": 8558,
+  "cache_write_tokens": 45182,
+  "cost_usd": 0.7946074
+ },
+ "wall_s": 295.4433594839993
+}

@@ -1,0 +1,45 @@
+{
+ "problem": "l2_070_gemm_sigmoid_scaling_residualadd",
+ "family": "gemm",
+ "seed_us": 1322.9119777679443,
+ "final_us": 1155.1040410995483,
+ "ab": [
+  1.1452751706319535,
+  1.1461723204135819,
+  1.146342783522991
+ ],
+ "kept_seed": false,
+ "plan": [
+  "persistent_kernel",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.1452751706319535
+ ],
+ "baselines_us": {
+  "compile": 1248.29,
+  "eager": 1268.51,
+  "max-autotune": 1203.46
+ },
+ "seed_kernel_us": 1362.4456666666667,
+ "final_kernel_us": 1187.83,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 33580,
+  "cache_read_tokens": 35488,
+  "cache_write_tokens": 36629,
+  "cost_usd": 1.3208662999999998
+ },
+ "wall_s": 368.9533569350001
+}

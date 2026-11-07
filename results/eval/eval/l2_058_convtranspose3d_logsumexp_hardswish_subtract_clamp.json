@@ -1,0 +1,46 @@
+{
+ "problem": "l2_058_convtranspose3d_logsumexp_hardswish_subtract_clamp",
+ "family": "convtranspose3d",
+ "seed_us": 720.8960056304932,
+ "final_us": 237.56800591945648,
+ "ab": [
+  3.0361185588674617,
+  3.0357095257445876,
+  3.034482706711362
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "memory_access"
+ ],
+ "runs": [
+  3.034482706711362
+ ],
+ "baselines_us": {
+  "compile": 2709.22,
+  "eager": 3902.24,
+  "max-autotune": 2700.38
+ },
+ "seed_kernel_us": 735.871,
+ "final_kernel_us": 239.41566666666677,
+ "roofline_us": 12.44875541225321,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 17437,
+  "cache_read_tokens": 19985,
+  "cache_write_tokens": 28449,
+  "cost_usd": 0.7280488
+ },
+ "wall_s": 456.5877538719999
+}

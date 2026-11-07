@@ -1,0 +1,46 @@
+{
+ "problem": "l1_001_square_matrix_multiplication",
+ "family": "matmul",
+ "seed_us": 1277.0559787750244,
+ "final_us": 1147.0719575881958,
+ "ab": [
+  1.1152033527299354,
+  1.1150509313537453,
+  1.1133181055704036
+ ],
+ "kept_seed": false,
+ "plan": [
+  "tensor_descriptors",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "tensor_descriptors",
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.1133181055704036
+ ],
+ "baselines_us": {
+  "compile": 1188.9,
+  "eager": 1188.8,
+  "max-autotune": 1149.98
+ },
+ "seed_kernel_us": 1219.6293333333335,
+ "final_kernel_us": 1094.6699999999998,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 26692,
+  "cache_read_tokens": 20234,
+  "cache_write_tokens": 34408,
+  "cost_usd": 1.0143071000000001
+ },
+ "wall_s": 293.18036810600006
+}

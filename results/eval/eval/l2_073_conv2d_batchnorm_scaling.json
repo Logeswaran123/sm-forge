@@ -1,0 +1,46 @@
+{
+ "problem": "l2_073_conv2d_batchnorm_scaling",
+ "family": "conv2d",
+ "seed_us": 514.0479803085327,
+ "final_us": 393.21601390838623,
+ "ab": [
+  1.3072915703486547,
+  1.3072915703486547,
+  1.3072915703486547
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "device_specific",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  1.3072915703486547
+ ],
+ "baselines_us": {
+  "compile": 1077.28,
+  "eager": 3140.99,
+  "max-autotune": 1079.36
+ },
+ "seed_kernel_us": 530.5050000000001,
+ "final_kernel_us": 415.08933333333334,
+ "roofline_us": 331.6664165440475,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 24196,
+  "cache_read_tokens": 21644,
+  "cache_write_tokens": 27822,
+  "cost_usd": 0.8568473000000001
+ },
+ "wall_s": 293.7225266710002
+}

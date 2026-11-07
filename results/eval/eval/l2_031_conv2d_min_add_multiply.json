@@ -1,0 +1,47 @@
+{
+ "problem": "l2_031_conv2d_min_add_multiply",
+ "family": "conv2d",
+ "seed_us": 4350.97599029541,
+ "final_us": 1655.8719873428345,
+ "ab": [
+  2.6276040802389495,
+  2.635611519336997,
+  2.6346833388218234
+ ],
+ "kept_seed": false,
+ "plan": [
+  "memory_access",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "runs": [
+  2.6276040802389495
+ ],
+ "baselines_us": {
+  "compile": 2202.56,
+  "eager": 4795.42,
+  "max-autotune": 1859.62
+ },
+ "seed_kernel_us": 4161.239333333334,
+ "final_kernel_us": 1559.823333333333,
+ "roofline_us": 1289.3047847828711,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 21047,
+  "cache_read_tokens": 13430,
+  "cache_write_tokens": 23442,
+  "cost_usd": 0.6138008
+ },
+ "wall_s": 272.37068435299807
+}

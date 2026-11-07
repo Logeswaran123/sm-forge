@@ -1,0 +1,45 @@
+{
+ "problem": "l2_053_gemm_scaling_hardtanh_gelu",
+ "family": "gemm",
+ "seed_us": 2458.49609375,
+ "final_us": 2353.15203666687,
+ "ab": [
+  1.0622413886028472,
+  1.044767212420471,
+  1.0457771432450809
+ ],
+ "kept_seed": false,
+ "plan": [
+  "tensor_descriptors",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.044767212420471
+ ],
+ "baselines_us": {
+  "compile": 2408.48,
+  "eager": 2471.74,
+  "max-autotune": 2315.17
+ },
+ "seed_kernel_us": 2507.773666666667,
+ "final_kernel_us": 2376.246,
+ "roofline_us": 2365.4398918151855,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 8,
+  "input_tokens": 22,
+  "output_tokens": 42547,
+  "cache_read_tokens": 32278,
+  "cache_write_tokens": 59420,
+  "cost_usd": 1.9645606999999998
+ },
+ "wall_s": 449.52319544399995
+}

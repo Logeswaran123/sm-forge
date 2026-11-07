@@ -1,0 +1,46 @@
+{
+ "problem": "l2_100_convtranspose3d_clamp_min_divide",
+ "family": "convtranspose3d",
+ "seed_us": 47430.110931396484,
+ "final_us": 538.9440059661865,
+ "ab": [
+  88.03421610446128,
+  88.04229136111736,
+  88.0056377032464
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "runs": [
+  88.0056377032464
+ ],
+ "baselines_us": {
+  "compile": 1794.14,
+  "eager": 2887.68,
+  "max-autotune": 1782.91
+ },
+ "seed_kernel_us": 49330.90333333332,
+ "final_kernel_us": 555.3426666666685,
+ "roofline_us": 420.9974807454273,
+ "correctness": {
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 24295,
+  "cache_read_tokens": 18771,
+  "cache_write_tokens": 23576,
+  "cost_usd": 0.6809782999999999
+ },
+ "wall_s": 392.18089105299987
+}

@@ -1,0 +1,44 @@
+{
+ "problem": "l2_012_gemm_multiply_leakyrelu",
+ "family": "gemm",
+ "seed_us": 1238.0160093307495,
+ "final_us": 1178.4319877624512,
+ "ab": [
+  1.0512186678516444,
+  1.0505621216897154,
+  1.051275811486398
+ ],
+ "kept_seed": false,
+ "plan": [
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.0505621216897154
+ ],
+ "baselines_us": {
+  "compile": 1244.86,
+  "eager": 1255.2,
+  "max-autotune": 1200.45
+ },
+ "seed_kernel_us": 1235.4079999999997,
+ "final_kernel_us": 1075.6590000000003,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 12,
+  "output_tokens": 24278,
+  "cache_read_tokens": 20690,
+  "cache_write_tokens": 26884,
+  "cost_usd": 0.9121286999999999
+ },
+ "wall_s": 274.1711736069992
+}
