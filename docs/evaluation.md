@@ -69,3 +69,15 @@ results/eval/<name>/
 ```
 
 Every pipeline run's candidates are under `.smforge/runs/<stamp>/<name>/<problem>/`.
+
+## Plots
+
+```bash
+# the run's finals, seeds and eager times on the roofline, and its per-problem speedups
+python scripts/eval_plots.py --run eval
+# geomean over the seed per run, the first run as the baseline
+python scripts/eval_plots.py --ablations base,no-kb,t5 --exclude l2_023
+```
+
+The plots go to `plots/`. `--exclude` leaves problems out of every run, by id prefix, for a
+problem whose result would swing the geomean alone.

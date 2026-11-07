@@ -5,7 +5,7 @@ final kernel, under one roof per dtype at the measured matmul peak and DRAM read
 final above its roof does less work than the reference's FLOP count (an algorithmic change).
 
     python scripts/eval_plots.py --run eval
-    python scripts/eval_plots.py --ablations abl-base,abl-no-kb,abl-t5
+    python scripts/eval_plots.py --ablations abl-base,abl-no-kb,abl-t5 --exclude l2_023
 """
 
 from __future__ import annotations
@@ -35,6 +35,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", help="an eval run's name: roofline and speedup plots")
     parser.add_argument("--ablations", help="comma-separated run names, the first the baseline")
+    parser.add_argument(
+        "--exclude", help="comma-separated problem id prefixes left out of the ablations"
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("plots"))
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -42,7 +45,8 @@ def main() -> None:
         roofline(args.run, args.output_dir / f"{args.run}_roofline.png")
         speedups(args.run, args.output_dir / f"{args.run}_speedups.png")
     if args.ablations:
-        ablations(args.ablations.split(","), args.output_dir / "ablations.png")
+        exclude = args.exclude.split(",") if args.exclude else []
+        ablations(args.ablations.split(","), args.output_dir / "ablations.png", exclude)
 
 
 def roofline(run: str, output: Path) -> None:
@@ -153,12 +157,13 @@ def speedups(run: str, output: Path) -> None:
     _save(fig, output)
 
 
-def ablations(runs: list[str], output: Path) -> None:
+def ablations(runs: list[str], output: Path, exclude: list[str]) -> None:
     loaded = [(name, *load_run(EVAL_DIR / name)) for name in runs]
     base = loaded[0][1]
     rows = []
     for _name, config, problems in loaded:
-        s = summarize(problems)
+        kept = [p for p in problems if not p.problem.startswith(tuple(exclude))]
+        s = summarize(kept)
         rows.append((differences(config, base), s["geomean_over_seed"] or 0, s["regressions"]))
     fig, ax = _axes((8, 0.45 * len(rows) + 1.5))
     color = SERIES["eager"][0]
@@ -172,7 +177,7 @@ def ablations(runs: list[str], output: Path) -> None:
         text = f"{value:.2f}x" + (f", {regressions} regressions" if regressions else "")
         ax.annotate(
             text,
-            (value, i),
+            (max(value, values[0]), i),  # past the baseline's line, not across it
             xytext=(4, 0),
             textcoords="offset points",
             va="center",
@@ -182,8 +187,9 @@ def ablations(runs: list[str], output: Path) -> None:
     ax.set_yticks(range(len(rows)), labels, fontsize=9, color=INK)
     ax.invert_yaxis()
     ax.set_xlabel("Geomean final over seed (x)", color=INK)
+    left_out = f"\nwithout {', '.join(exclude)} in every run" if exclude else ""
     ax.set_title(
-        "Ablations: the same problems under each config (dashed: baseline)",
+        f"Ablations: the same problems under each config (dashed: baseline){left_out}",
         color=INK,
         fontsize=11,
         loc="left",
