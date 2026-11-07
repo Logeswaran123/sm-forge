@@ -897,9 +897,11 @@ def cmd_eval_run(args: argparse.Namespace) -> int:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     llm = create_client(config.llm, transcripts=config.cache_dir / "transcripts" / stamp)
     with Runner(config) as runner:
-        (run_dir / "device.json").write_text(
-            json.dumps(provenance(runner.call("device")), indent=1)
-        )
+        # the first session's provenance stays: a resumed run keeps the hash it started on
+        if not (run_dir / "device.json").exists():
+            (run_dir / "device.json").write_text(
+                json.dumps(provenance(runner.call("device")), indent=1)
+            )
         for problem in todo:
             workdir = config.cache_dir / "runs" / stamp / args.name / problem.id
             try:
