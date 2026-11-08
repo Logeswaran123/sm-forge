@@ -26,7 +26,7 @@ smforge kb list                              # entries, stages, measured speedup
 smforge kb list --dsl cuda
 smforge kb show fusion --families gemm       # a stage's slice as a prompt receives it
 smforge kb verify --write                    # run every pair on this GPU, record speedups
-smforge kb verify --dsl cuda --ids gemm_cutlass_sm80
+smforge kb verify --dsl cuda --ids cutlass_sm80_gemm
 pytest runners/test_kb_examples.py           # the same checks, both knowledge bases, as tests
 ```
 
