@@ -980,6 +980,87 @@ Geomean 0.98x: the CUDA pipeline takes its seeds to about where the Triton pipel
 
 Exit: report on the eval split, plus the ablation table.
 
+Built in v0.8.0, with these differences from the list above:
+
+- `smforge eval run --name <run>` writes one JSON file per problem to `results/eval/<run>/`,
+  with the run's config and the device beside them. Rerunning resumes, and a run's config is fixed.
+  `smforge eval report --runs a,b,c` tabulates runs with the first as the baseline, and
+  `scripts/eval_plots.py` draws the roofline, per-problem speedups and the ablation runs. Eval
+  runs neither read nor write the lessons ledger, so stage 5's ledgers cannot reach the dev
+  ablations.
+- `ci` is used during optimization, so it cannot be the held-out shape. Held out instead: input
+  draws from 1000 on `ci` and `bench-gpu` (optimization checks draws 0 and 1), and each problem's
+  original KernelBench shapes (the `kernelbench` variant) at the timed dtype. Two eval problems
+  have no `kernelbench` variant.
+- `torch.compile` max-autotune (`max-autotune-no-cudagraphs`) was measured for the 42 eval
+  problems. The default mode was already in `results/baselines.csv`.
+- The ablations are switches on the pipeline: no facts (prompts show the timing only, no
+  fact-backed issues, no fact deltas in feedback), no re-analysis (no measurement after an
+  accepted stage), no rollback (a stage keeps its fastest correct candidate even if slower, and
+  the last stage's output is final), T, best-of-k (whole pipeline runs, the fastest kept), the
+  model and its effort. KB without arch gating is not run: on the RTX 5080 gating drops none of
+  the 42 Triton or 15 CUDA entries, so it is the baseline.
+- The ablations run on 12 dev problems, spread over the families: l1_008, l2_095 (matmul),
+  l2_057, l2_067 (conv2d), l2_088, l2_045 (gemm), l2_013 (convtranspose3d), l2_023 (conv3d),
+  l2_091 (convtranspose2d), l1_035 (norm), inf_paged_attention_decode (attention), l1_049
+  (reduction).
+
+Result (2026-11-06), eval split: `smforge eval run --split eval` on the 42 eval problems with
+stage 5's settings (Opus 5.5 at effort medium, at most 2 stages plus autotuning, 2 candidates per
+stage, ncu and memcheck on), at commit 2f79fa1. 36 improved, 6 kept their seed, 0 regressions,
+0 incorrect. Geomean 2.73x over the seeds (median 1.43x, kernel-only 2.87x), 4.08x over eager,
+2.61x over `torch.compile` and 2.27x over max-autotune. The finals beat `torch.compile` on 38
+problems and max-autotune on 35. Held out: `ci` passed on 40 and `bench-gpu` on 42 at draws from
+1000, and the KernelBench shapes passed on 33, with 7 skipped because the reference ran out of
+memory at those shapes. Median roofline fraction 0.91. Six finals sit above the 1.15 roof (l1_040,
+l2_018, l2_044, l2_080, l2_083, l2_098): each drops work the reference does. $43.32 in all, $1.03
+and 5.7 minutes per problem, cache-hit share 0.43. Report: `smforge eval report --runs eval`,
+plots in `plots/eval_roofline.png` and `plots/eval_speedups.png`.
+
+Result (2026-11-08), ablations: 13 runs on the 12 problems, each with stage 5's settings except
+the one change, all at commit d2092f0. Every run improved all 12 problems with 0 regressions and
+0 incorrect. Every final passed `ci` and `bench-gpu` at draws from 1000, and its KernelBench
+shapes on 10 problems (l1_035's run the reference out of memory, and inf_paged_attention_decode
+has none). Geomean over the seeds:
+
+| Run | Change | All 12 | Without l2_023 | $ per problem | Minutes per problem |
+|---|---|---|---|---|---|
+| abl-base | none | 2.18x | 2.04x | 1.15 | 5.9 |
+| abl-no-kb | no KB | 3.01x | 2.07x | 1.08 | 5.7 |
+| abl-no-facts | no facts | 2.10x | 1.99x | 0.80 | 4.0 |
+| abl-no-reanalysis | no re-analysis | 2.13x | 2.01x | 1.05 | 5.5 |
+| abl-no-rollback | no rollback | 2.20x | 2.04x | 0.98 | 5.7 |
+| abl-t1 | T = 1 | 2.01x | 1.88x | 0.59 | 4.5 |
+| abl-t3 | T = 3 | 2.27x | 2.12x | 1.35 | 6.3 |
+| abl-t5 | T = 5 | 2.21x | 2.05x | 2.72 | 8.5 |
+| abl-best3 | best-of-3 | 2.30x | 2.10x | 2.80 | 16.2 |
+| abl-opus-low | Opus 5.5, effort low | 1.88x | 1.80x | 0.80 | 4.4 |
+| abl-opus-high | Opus 5.5, effort high | 2.32x | 2.13x | 1.82 | 9.7 |
+| abl-sonnet | Sonnet 5.5 | 1.96x | 1.83x | 0.43 | 3.6 |
+| abl-haiku | Haiku 5.5 | 1.84x | 1.71x | 0.03 | 4.1 |
+
+- l2_023 (conv3d, GroupNorm, mean) is left out of the second column. When GroupNorm's scale is
+  uniform within each group, the output's mean is the mean of its shift for any input, so the
+  convolution can be skipped. The default init (scale all ones) is uniform. The no-KB run found
+  this: its kernel checks the scale on the GPU and only skips the convolution when the identity
+  holds, so it is correct for any weights, but it is timed at 6.0 us (188x) only because the
+  benchmark keeps the default init. The other runs reached 3.1x to 6.1x on l2_023 without it.
+- The model and its effort move the result most: from Haiku 5.5 (1.71x) through Opus 5.5 at
+  low effort (1.80x) and Sonnet 5.5 (1.83x) to Opus 5.5 at medium (2.04x) and high (2.13x).
+- Removing the KB changes nothing measurable (2.07x against 2.04x). The paper's claim that domain
+  knowledge matters more than model scale does not hold here: model scale is the larger lever.
+- Facts, re-analysis and rollback are each within 3% of the baseline. Without facts the run is
+  30% cheaper and a third faster, because the prompts are shorter.
+- One candidate per stage (T = 1) loses 8%. Past T = 2, extra candidates and best-of-3 add 0.5%
+  to 4% at 1.2x to 2.4x the cost.
+- 13 runs cost $187.41 and about 17 hours. Each config ran once, and the baseline was not
+  repeated, so differences of a few percent may be sampling noise.
+- The max-autotune column of `results/eval/ablations.md` is empty: max-autotune was measured for
+  the eval split only.
+
+Report: `results/eval/ablations.md`, plot: `plots/ablations.png` (`scripts/eval_plots.py
+--ablations ... --exclude l2_023`).
+
 ## 7. Cost
 
 Opus 5.5 costs $4 per MTok input, $20 per MTok output, and $0.20 per MTok for cache reads. Take a

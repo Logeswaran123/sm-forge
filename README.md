@@ -142,6 +142,8 @@ To work on your own kernel, see [bring your own kernel](docs/examples.md#6-bring
 | Triton pipeline, 96 `dev` problems | 80 improved, geomean 2.55x over the starting kernels. Faster than `torch.compile` on 87, geomean 2.36x. $1.07 per problem | `results/pipeline.csv` |
 | CUDA C++ pipeline, 14 `dev` problems | 13 improved, geomean 2.81x over the starting kernels. 0.98x of the Triton results | `results/pipeline_cuda.csv` |
 | CUTLASS tile search, 5 GEMM shapes | Within 0.995x to 1.048x of cuBLAS. 1.10x to 1.30x over CUTLASS's default config on 3 shapes | `results/tilesearch.csv` |
+| Triton pipeline, 42 held-out `eval` problems | 36 improved, 0 regressions, geomean 2.73x over the starting kernels. 2.61x over `torch.compile`, 2.27x over max-autotune. $1.03 per problem | `results/eval/eval/` |
+| Ablations, 13 configs on 12 `dev` problems | The model and its effort matter most: 1.71x with Haiku 5.5 to 2.13x with Opus 5.5 at high effort. No KB, no facts, no re-analysis or no rollback stay within 3% of the 2.04x baseline | `results/eval/ablations.md` |
 
 ## Running tests
 
