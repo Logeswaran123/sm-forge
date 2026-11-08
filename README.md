@@ -196,7 +196,8 @@ New to the project? Start with the examples, then the kernel format.
 ## Contributing
 
 Bug reports, fixes, new problems and results from other GPUs are welcome. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report security
+problems privately as described in [SECURITY.md](SECURITY.md).
 
 ## Citation & license
 
