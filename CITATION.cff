@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use sm-forge, please cite it as below."
+title: "sm-forge: LLM-driven kernel optimization for NVIDIA GPUs"
+type: software
+authors:
+  - family-names: Sivakumar
+    given-names: Logeswaran
+repository-code: "https://github.com/Logeswaran123/sm-forge"
+license: Apache-2.0
+version: 1.0.1
+date-released: 2026-11-08
+keywords:
+  - cuda
+  - triton
+  - gpu
+  - kernel-optimization
+  - llm
