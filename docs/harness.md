@@ -23,7 +23,7 @@ smforge-skill profile kernel.py --spec spec.yaml --baseline seed.py
 |---|---|
 | `validate` | Static checks and the audit of `forward`: no PyTorch compute, no state kept on `self`, no host syncs, and the language's own rules (block shapes for Triton, launch checks for CUDA). |
 | `check` | Runs the kernel and the oracle on two input draws and compares the outputs, then lists the kernels one forward launches and rejects library or ATen compute kernels. Autotuned Triton kernels are checked with every config. |
-| `bench` | Device time at the spec's shape, a quantile of many samples with the L2 cache flushed. With `--baseline`, an interleaved A/B: the verdict is faster or slower only outside the A/A noise band (`BENCHMARK_MIN_EFFECT`, 2%). |
+| `bench` | Device time at the spec's shape, a quantile of many samples with the L2 cache flushed. With `--baseline`, an interleaved A/B: the verdict is faster or slower only outside the A/A noise band, how much a kernel's time moves when timed against itself (`BENCHMARK_MIN_EFFECT`, 2%). |
 | `facts` | Per kernel: grid, block, registers, spills, shared memory, resident CTAs per SM, waves, and the SASS instruction mix. |
 | `sanitize` | compute-sanitizer (`memcheck`, `racecheck`, `initcheck` or `synccheck`) on a warm-up forward and one more, with PyTorch's caching allocator off so an out-of-bounds access does not land in a cached block. |
 | `profile` | Nsight Compute's speed-of-light, memory, occupancy, launch, warp-state and source sections on the first launch of each kernel, about 30 lines per kernel, and with `--baseline` what changed. |

@@ -1,7 +1,8 @@
 # Optimization: one stage, or the whole pipeline
 
-Both commands start from a problem's seed, call the LLM, and keep a candidate only if the
-harness says it is correct and faster. Add `--dsl cuda` to work on the CUDA C++ seeds.
+Both commands start from a problem's seed (its starting kernel), have the LLM write candidates,
+and keep a candidate only if the harness says it is correct and faster. Add `--dsl cuda` to work
+on the CUDA C++ seeds.
 
 ## How a candidate is judged
 
@@ -24,10 +25,24 @@ smforge optimize --stage autotuning --ids l1_002_standard_matrix_multiplication 
 smforge optimize --stage memory_access --split dev --budget-usd 20
 ```
 
-The stages are `algorithmic`, `dtype_fix`, `fusion`, `memory_access`, `tensor_descriptors`,
-`persistent_kernel`, `device_specific`, `autotuning` and `open_ended`. The LLM gets the stage's
-instructions, the [knowledge base](knowledge-base.md) entries for the problem's family, the
-reference, and the current kernel with its timing and per-kernel facts.
+The LLM gets the stage's instructions, the [knowledge base](knowledge-base.md) entries for the
+problem's family, the reference, and the current kernel with its timing and per-kernel facts.
+
+### Stages
+
+Each stage asks for one kind of change:
+
+| Stage | Changes |
+|---|---|
+| `algorithmic` | what is computed: less work for the same result, e.g. a convolution as a matrix multiply on tensor cores |
+| `dtype_fix` | how data types are used, e.g. feeding fp16 to tensor cores instead of converting to fp32 first |
+| `fusion` | fewer kernels: ops applied in the kernel that produces their input instead of a separate pass |
+| `memory_access` | how memory is read and written: coalesced loads, no extra copies or transposes |
+| `tensor_descriptors` | how tiles reach shared memory: loads overlapped with compute |
+| `persistent_kernel` | how work spreads over the SMs: split-K, or one long-running block per SM |
+| `device_specific` | tile sizes, warps and registers for this GPU, so nothing spills |
+| `autotuning` | launch settings only, tried over several configs |
+| `open_ended` | the specific change the analyzer proposed |
 
 Results go to `results/stages.csv`, and candidates and their outcomes to
 `.smforge/runs/<run>/<problem>/<stage>/`.
@@ -87,9 +102,13 @@ calling the LLM, to rerun a stage's checks on the same candidates.
 | `--ids`, `--split`, `--source` | all seeded | which problems |
 | `--dsl` | `triton` | `cuda` for the CUDA C++ seeds |
 | `--max-iters` | 3 (`optimize`), 2 (`pipeline`) | candidates per stage |
+| `--keep` | 2 | earlier candidates of the stage shown to the LLM |
 | `--budget-usd` | none | stop once the run has spent this much |
 | `--backend`, `--claude-bin` | from `.env` | `api` or `claude-code` ([configuration](configuration.md)) |
 | `--max-stages` (pipeline) | 3 | stages per problem besides autotuning |
 | `--effort` (pipeline) | from `.env` | optimizer effort: low, medium, high, xhigh, max |
 | `--from` (pipeline) | none | skip the selected problems before this one |
 | `--no-ncu`, `--no-memcheck` (pipeline) | off | run without Nsight Compute, finalize without memcheck |
+
+The published results used `--max-stages 2 --effort medium`. The defaults (3 stages, effort
+`high` from `.env.example`) take longer and cost more per problem.

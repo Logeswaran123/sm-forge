@@ -1,4 +1,4 @@
-"""smforge: device baseline and the problem corpus; the optimization pipeline in later stages."""
+"""smforge: optimize Triton and CUDA C++ kernels with an LLM, checked and timed on your GPU."""
 
 from __future__ import annotations
 
@@ -87,7 +87,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="smforge", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    device = commands.add_parser("device", help="query the GPU and measure its baseline (stage 0)")
+    device = commands.add_parser(
+        "device", help="query the GPU and measure its bandwidth, TFLOPS and timing noise"
+    )
     device.add_argument("--probes", action="store_true", help="compile feature probes")
     device.add_argument("--roofline", action="store_true", help="measure bandwidth and TFLOPS")
     device.add_argument("--noise", action="store_true", help="A/A timing noise")
@@ -97,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     device.add_argument("--json", action="store_true", help="print JSON")
     device.set_defaults(func=cmd_device)
 
-    corpus = commands.add_parser("corpus", help="build and measure the problem corpus (stage 2)")
+    corpus = commands.add_parser("corpus", help="list, import, split and time the problems")
     corpus_commands = corpus.add_subparsers(dest="corpus_command", required=True)
 
     kernelbench = corpus_commands.add_parser(
@@ -131,7 +133,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     baselines.set_defaults(func=cmd_baselines)
 
-    seed = commands.add_parser("seed", help="write a seed kernel for corpus problems with the LLM")
+    seed = commands.add_parser(
+        "seed", help="write a starting (seed) kernel for problems with the LLM"
+    )
     seed.add_argument("--ids", help="comma-separated problem ids")
     seed.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
     seed.add_argument("--source", help="only problems from this source (kernelbench, inference)")
@@ -144,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     seed.set_defaults(func=cmd_seed)
 
     optimize = commands.add_parser(
-        "optimize", help="run an optimization stage on corpus problems with the LLM (stage 4)"
+        "optimize", help="run one optimization stage on problems with the LLM"
     )
     optimize.add_argument("--stage", required=True, choices=sorted(STAGE_PROMPTS))
     optimize.add_argument("--ids", help="comma-separated problem ids")
@@ -161,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     optimize.set_defaults(func=cmd_optimize)
 
     pipeline = commands.add_parser(
-        "pipeline", help="analyze, plan and run every stage on corpus problems (stage 5)"
+        "pipeline", help="analyze, plan and run the optimization stages on problems"
     )
     pipeline.add_argument("--ids", help="comma-separated problem ids")
     pipeline.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
@@ -188,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.set_defaults(func=cmd_pipeline)
 
     claude = commands.add_parser(
-        "claude", help="optimize corpus problems in a headless Claude Code workspace (stage 6)"
+        "claude", help="optimize problems in a headless Claude Code session"
     )
     claude.add_argument("--ids", help="comma-separated problem ids")
     claude.add_argument("--dsl", choices=DSLS, default="triton", help="kernel language")
@@ -207,9 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     claude.set_defaults(func=cmd_claude)
 
-    tiles = commands.add_parser(
-        "tile-search", help="search CUTLASS GEMM tile configs with the LLM (stage 7)"
-    )
+    tiles = commands.add_parser("tile-search", help="search CUTLASS GEMM tile configs with the LLM")
     tiles.add_argument(
         "--shapes", required=True, help="comma-separated MxNxK, optionally :bfloat16 and :row"
     )
@@ -222,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     tiles.set_defaults(func=cmd_tile_search)
 
     evaluation = commands.add_parser(
-        "eval", help="the pipeline over a split with one fixed config, and its report (stage 8)"
+        "eval", help="run the pipeline over a split with one fixed config, and report"
     )
     eval_commands = evaluation.add_subparsers(dest="eval_command", required=True)
     eval_run = eval_commands.add_parser("run", help="run and measure; resumes where it stopped")
@@ -257,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_report.add_argument("--output", type=Path, help="write here instead of printing")
     eval_report.set_defaults(func=cmd_eval_report)
 
-    kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns (stage 3)")
+    kb = commands.add_parser("kb", help="the knowledge base of constraints and patterns")
     kb_commands = kb.add_subparsers(dest="kb_command", required=True)
 
     kb_list = kb_commands.add_parser("list", help="entries with their stage and measured speedup")

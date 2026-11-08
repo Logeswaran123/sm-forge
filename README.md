@@ -12,12 +12,13 @@
 
 ## What is sm-forge?
 
-sm-forge takes a GPU kernel that already works and tries to make it faster. You give it the
-PyTorch module the kernel implements, the shapes you care about, and the kernel itself, in Triton
-or CUDA C++. An LLM proposes rewrites. sm-forge builds each one, compares its output with
-PyTorch's, checks that it doesn't hand the work to cuBLAS or another library, and times it
-against the current kernel. A rewrite that is wrong, or not clearly faster, is thrown away. It
-started as an NVIDIA counterpart to Intel's [Xe-Forge](https://github.com/IntelLabs/Xe-Forge).
+sm-forge takes a working GPU kernel and tries to make it faster. You give it the matching
+PyTorch module, the input shapes you care about, and the kernel code in Triton or CUDA C++. An
+LLM proposes changes, and sm-forge builds and tests each version. It checks that the output
+matches PyTorch's, that the kernel doesn't pass the work off to cuBLAS or another library, and
+that it runs faster than the current version. Anything incorrect or without a clear speedup gets
+discarded. The project started as an NVIDIA counterpart to Intel's
+[Xe-Forge](https://github.com/IntelLabs/Xe-Forge).
 
 There are three ways to run it:
 
@@ -27,9 +28,19 @@ There are three ways to run it:
 | **Claude Code engine** | the same | a headless Claude Code session tries its own ideas, and sm-forge times each one and picks the winner | a longer look at one problem |
 | **Tile search** | GEMM shapes | proposes CUTLASS tile configs and times them against cuBLAS | tuning a matmul for a shape |
 
-The repository also holds 138 problems to work on (KernelBench and common inference kernels) with
-starting kernels, a knowledge base of optimization rules that were each checked on the GPU, and
-the numbers from an RTX 5080.
+The repository comes with 138 problems ready to optimize, a knowledge base of optimization rules
+that the LLM is shown, and the results from an RTX 5080.
+
+### Terms used in these docs
+
+| Term | Meaning |
+|---|---|
+| problem | A folder with a PyTorch reference, a spec and a starting kernel. |
+| reference | The PyTorch module (`reference.py`) every kernel must match. |
+| spec | The input shapes to check (`ci`) and to time (`bench-gpu`), in `spec.yaml`. |
+| seed | The starting kernel that speedups are measured against. |
+| `dev` and `eval` | The problems used during development, and the ones held back for testing. |
+| A/B run | Two kernels timed in alternating rounds, where under 2% counts as no change. |
 
 ## Tested on
 
@@ -48,6 +59,9 @@ Other NVIDIA GPUs from sm_80 up should work but are untested. The committed resu
 > You need an NVIDIA GPU with a CUDA 12.8+ driver, Python 3.11+, and for CUDA C++ kernels the
 > CUDA toolkit (nvcc), a C++ compiler and git. For the LLM steps you need an Anthropic API key
 > or a logged-in [Claude Code](https://claude.com/claude-code).
+
+Steps 1 to 4 make no LLM calls. Step 5 does, and an optimized problem costs about $1 in LLM
+calls.
 
 ### 1. Install
 
@@ -85,13 +99,15 @@ smforge device --all      # probes features, measures bandwidth, TFLOPS and timi
 smforge device --tools    # which of ncu, nsys and compute-sanitizer work here
 ```
 
-This writes `hardware/<gpu>.yaml`, which the optimizer reads. The profiling tools are optional.
-See [profiling tools](docs/profiling-tools.md) to enable them.
+This takes a few minutes and writes `hardware/<gpu>.yaml`, which the optimizer reads. The
+profiling tools are optional. See [profiling tools](docs/profiling-tools.md) to enable them.
 
 ### 4. Check and time a kernel (no LLM)
 
-Every problem in `corpus/` has a reference, a spec and a starting kernel. Check one and time it
-against another:
+There are two commands. `smforge-skill` works on one kernel file and never calls the LLM.
+`smforge` runs the optimizer and the other tools. Take a matrix multiply problem that has both a
+Triton and a CUDA C++ seed, check the Triton one against PyTorch, then time it against the CUDA
+one:
 
 ```bash
 P=corpus/kernelbench/l1_002_standard_matrix_multiplication
@@ -115,10 +131,14 @@ smforge pipeline --ids l2_057_conv2d_relu_hardswish --max-stages 2 --max-iters 2
 l2_057_conv2d_relu_hardswish: 1.25x [open_ended+ memory_access+ autotuning+] ($0.46)
 ```
 
-That is the speedup over the starting kernel and what the LLM calls cost. Results vary from run
-to run. The final kernel and every candidate are in `.smforge/runs/<run>/`. The
-[examples](docs/examples.md) walk through reading a run like this one, and through everything
-else below.
+This takes a few minutes. The line gives the speedup over the seed, the optimization stages
+that ran (`+` if the LLM's change was kept, `-` if every attempt was rejected), and what the LLM
+calls cost. Results vary from run to run.
+
+The final kernel and every attempt are in `.smforge/runs/<run>/`. The run also replaces this
+problem's row in `results/pipeline.csv`, which holds the published numbers, so
+`git checkout results/` puts them back. The [examples](docs/examples.md) walk through reading a
+run like this one.
 
 ## What you can run
 
@@ -137,12 +157,15 @@ To work on your own kernel, see [bring your own kernel](docs/examples.md#6-bring
 
 ## Results on an RTX 5080
 
+Speedups are geometric means over the problems, with Opus 5.5 as the LLM. `torch.compile` and
+max-autotune are PyTorch's own compiler at its default and most thorough settings.
+
 | Run | Result | Table |
 |---|---|---|
-| Triton pipeline, 96 `dev` problems | 80 improved, geomean 2.55x over the starting kernels. Faster than `torch.compile` on 87, geomean 2.36x. $1.07 per problem | `results/pipeline.csv` |
-| CUDA C++ pipeline, 14 `dev` problems | 13 improved, geomean 2.81x over the starting kernels. 0.98x of the Triton results | `results/pipeline_cuda.csv` |
+| Triton pipeline, 96 `dev` problems | 80 faster than their seed, 2.55x on average. Faster than `torch.compile` on 87, by 2.36x on average. $1.07 per problem | `results/pipeline.csv` |
+| CUDA C++ pipeline, 14 `dev` problems | 13 faster than their seed, 2.81x on average, ending about level with the Triton results (0.98x) | `results/pipeline_cuda.csv` |
 | CUTLASS tile search, 5 GEMM shapes | Within 0.995x to 1.048x of cuBLAS. 1.10x to 1.30x over CUTLASS's default config on 3 shapes | `results/tilesearch.csv` |
-| Triton pipeline, 42 held-out `eval` problems | 36 improved, 0 regressions, geomean 2.73x over the starting kernels. 2.61x over `torch.compile`, 2.27x over max-autotune. $1.03 per problem | `results/eval/eval/` |
+| Triton pipeline, 42 held-out `eval` problems | 36 faster than their seed and none slower, 2.73x on average. 2.61x faster than `torch.compile` and 2.27x faster than max-autotune. $1.03 per problem | `results/eval/eval/` |
 | Ablations, 13 configs on 12 `dev` problems | The model and its effort matter most: 1.71x with Haiku 5.5 to 2.13x with Opus 5.5 at high effort. No KB, no facts, no re-analysis or no rollback stay within 3% of the 2.04x baseline | `results/eval/ablations.md` |
 
 ## Running tests
@@ -154,6 +177,8 @@ ruff check .
 ```
 
 ## Documentation
+
+New to the project? Start with the examples, then the kernel format.
 
 - [Examples](docs/examples.md): walkthroughs, from timing a kernel to bringing your own.
 - [Kernel format](docs/kernel-format.md): reference, kernel and spec files, in Triton and CUDA C++.

@@ -29,9 +29,9 @@ K and N must be even: `cp.async` copies at least 4 bytes, so rows of A and B mus
 |---|---|
 | threadblock tile M, N, K | typically 64 to 256 for M and N, 32 or 64 for K |
 | warp tile M, N, K | divides the threadblock tile, at most 128 accumulators per thread |
-| stages | 2 to 8, within the shared memory per block (99 KB on sm_120) |
-| swizzle | 1, 2, 4 or 8 |
-| split-K | 1, or slices whose float partials a second kernel sums |
+| stages | 2 to 8 shared-memory buffers in the main loop, within the shared memory per block (99 KB on sm_120) |
+| swizzle | 1, 2, 4 or 8: the order blocks are launched in, for L2 cache reuse |
+| split-K | 1, or the K dimension split into slices whose float partials a second kernel sums |
 
 A config is checked against these limits before it builds. A valid one becomes a `cuda` kernel
 file, must match PyTorch on an odd-sized `ci` shape and on the timed shape, and is then timed.

@@ -42,8 +42,10 @@ baseline 10913.8 us, candidate 1165.3 us (p20): 9.366x, faster (min effect 2.0%)
 rounds: 9.372 9.365 9.179 9.987 10.013 10.023 9.192 9.360 9.364 9.366
 ```
 
-The two kernels run interleaved, ten rounds, and the verdict says faster only beyond the 2% noise
-band. The CUDA seed is a plain SIMT GEMM, while the Triton seed uses tensor cores through `tl.dot`.
+The first file is the candidate and `--baseline` the kernel it is compared with. The two run in
+alternating rounds, ten of them, and the verdict says faster only beyond the 2% noise band. The
+CUDA seed is a simple kernel without tensor cores, while the Triton seed uses them through
+`tl.dot`.
 
 ## 2. Look at what a kernel compiles to
 
@@ -59,7 +61,8 @@ conv_relu_hswish_kernel<__half>: grid 254016x1x1 (254016 CTAs), block 256x1x1 (8
 arithmetic intensity 63.8 FLOP/byte; ridge point 131.2, so memory-bound
 ```
 
-One thread per output, no shared memory, no tensor-core instructions (`HMMA`), and 504 waves of
+A CTA is a thread block, and a wave is one round of blocks filling every SM. So this is one
+thread per output, no shared memory, no tensor-core instructions (`HMMA`), and 504 rounds of
 blocks. The arithmetic intensity says it could be memory-bound, but this kernel is far from
 either limit. These are the numbers the optimizer starts from.
 
@@ -71,9 +74,10 @@ WARNING smforge.agents.pipeline: l2_057_conv2d_relu_hardswish: the dtype_fix out
 l2_057_conv2d_relu_hardswish: 30.29x [algorithmic+ dtype_fix+] ($1.03)
 ```
 
-Two rewrites were planned and both kept (`+`). The final kernel beat the seed in three A/B runs
-in fresh processes (30.29x, 30.29x, 32.69x). They differed by more than the noise band, so the
-slowest counts.
+Two stages were planned, `algorithmic` and `dtype_fix`, and the LLM's change was kept in both
+(`+`). The final kernel beat the seed in three A/B runs in fresh processes (30.29x, 30.29x,
+32.69x). They differed by more than the A/A band, the noise seen when a kernel is timed against
+itself, so the slowest counts. The warning says the same.
 
 Everything the run did is under `.smforge/runs/<run>/l2_057_conv2d_relu_hardswish/pipeline/`:
 
@@ -99,8 +103,8 @@ The analyzer's summary in `pipeline.json` is a good first read:
 The issues it found, the first from the ncu counters and the rest from the analyzer reading the
 code: `uncoalesced_access` (global loads use 17.2 of 32 bytes per sector), `no_tensor_core_mma`,
 `upcast_operands`, `per_call_weight_prep`, and an open-ended note that no data is reused across
-threads. They routed to two stages. In `attempts.json`, the
-first stage's accepted candidate says what it changed:
+threads. Each issue maps to an [optimization stage](optimization.md#stages), and these mapped to
+two. In `attempts.json`, the first stage's accepted candidate says what it changed:
 
 > I replaced the scalar direct convolution with an implicit GEMM on tensor cores for fp16 and
 > bf16 inputs. It uses `mma.sync` m16n8k16 with fp32 accumulation...
@@ -156,9 +160,9 @@ $ smforge tile-search --shapes 2048x4096x8192:row --rounds 3 --per-round 6
 ```
 
 CUTLASS's default config does not fit this GPU's shared memory, so the baseline is the same tile
-with fewer stages. After 18 configs the best runs 1.25x faster than that and 2.4% faster than
-cuBLAS. Every config tried is in `.smforge/runs/<run>/tilesearch/<shape>/trials.json`, and each
-one is a kernel file you can run with `smforge-skill`. More in [tile search](tile-search.md).
+with fewer pipeline stages (shared-memory buffers). After 18 configs the best runs 1.25x faster
+than that and 2.4% faster than cuBLAS. Every config tried is in
+`.smforge/runs/<run>/tilesearch/<shape>/trials.json`, and each one is a kernel file you can run with `smforge-skill`. More in [tile search](tile-search.md).
 
 ## 6. Bring your own kernel
 
