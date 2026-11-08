@@ -193,6 +193,11 @@ New to the project? Start with the examples, then the kernel format.
 - [Configuration](docs/configuration.md): `.env` settings and where output goes.
 - [PLAN.md](PLAN.md): design notes and measured results.
 
+## Contributing
+
+Bug reports, fixes, new problems and results from other GPUs are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Citation & license
 
 ```bibtex
