@@ -1,7 +1,7 @@
 [project]
 name = "sm-forge"
 version = "0.8.0"
-description = "Multi-stage LLM-driven optimization of Triton kernels for NVIDIA GPUs"
+description = "LLM-driven optimization of Triton and CUDA C++ kernels for NVIDIA GPUs"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
