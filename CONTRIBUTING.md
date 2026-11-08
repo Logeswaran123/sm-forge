@@ -1,7 +1,8 @@
 # Contributing to sm-forge
 
 Thanks for taking the time to help. Bug reports, fixes, new problems, knowledge base entries,
-results from other GPUs and doc improvements are all welcome.
+results from other GPUs and doc improvements are all welcome. Everyone taking part is expected to
+follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Before you start
 
@@ -9,8 +10,8 @@ results from other GPUs and doc improvements are all welcome.
   PyTorch and Triton versions (`smforge device` prints them).
 - **Larger changes:** open an issue first to talk it through, so the work doesn't clash with
   something already planned.
-- **Security problems:** don't open a public issue. Report them privately from the repository's
-  **Security** tab (Report a vulnerability).
+- **Security problems:** don't open a public issue. Report them privately as described in the
+  [security policy](SECURITY.md).
 
 ## Set up
 
