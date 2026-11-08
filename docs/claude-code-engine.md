@@ -1,6 +1,7 @@
 # Claude Code engine
 
-`smforge claude` hands each problem to a headless Claude Code session in a workspace of its own,
+`smforge claude` hands each problem to a headless Claude Code session (`claude -p`, no terminal
+UI) in a workspace of its own,
 instead of the pipeline's fixed stages. The session decides what to try, and sm-forge checks and
 times every attempt and picks the winner itself.
 

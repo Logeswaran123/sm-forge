@@ -1,6 +1,6 @@
 # Kernel format
 
-sm-forge uses the KernelBench / Xe-Forge format. A problem is three files:
+sm-forge uses the same file layout as KernelBench and Xe-Forge. A problem is three files:
 
 | File | What it holds |
 |---|---|
@@ -30,7 +30,11 @@ bench-gpu:                            # the shape that is timed
     bytes: "2*(M*K + N*K + M*N)"
 ```
 
-A variant's `dtype` overrides the input's. `flop` and `bytes` give TFLOPS and GB/s in the timing
+`inputs` gives each input's shape in size letters and its dtype. `inits` lists the arguments of
+`Model.__init__` in order. Each variant (`ci`, `bench-gpu`, and any others you add) is a list of
+cases: `params` names the inputs, `dims` sets the size letters, and a `dtype` overrides the
+inputs'. `ci` is only checked for correctness, so use small, odd sizes there to catch edge
+cases. `bench-gpu` is checked and timed. `flop` and `bytes` give TFLOPS and GB/s in the timing
 output. Tolerances come from the command line, then the variant (`rtol`, `atol`), then the
 environment (`CORRECTNESS_RTOL`, `CORRECTNESS_ATOL`), then a default for the variant's dtype.
 
