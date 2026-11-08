@@ -22,7 +22,7 @@ engine](claude-code-engine.md) always uses Claude Code.
 | `ANTHROPIC_API_KEY` | | for the `api` backend |
 | `CLAUDE_BIN` | `claude` on `PATH` | Claude Code binary |
 | `LLM_MODEL` | `claude-opus-5-5` | model |
-| `LLM_EFFORT` | `high` | default effort (the planner uses `low`). `medium` costs less, and the published results used it |
+| `LLM_EFFORT` | `high` | default effort (the planner uses `low`) |
 | `LLM_MAX_TOKENS` | 64000 | output token cap per call |
 | `LLM_BUDGET_USD` | none | stop making LLM calls once a run has spent this much |
 | `DEVICE_INDEX` | 0 | GPU the worker runs on |

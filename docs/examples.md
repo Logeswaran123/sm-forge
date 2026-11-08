@@ -14,8 +14,8 @@ differ, and LLM runs differ from one run to the next.
 
 ## 1. Check and time a kernel
 
-No LLM needed. `l1_002_standard_matrix_multiplication` is an fp16 matrix multiply (GEMM) with a
-Triton seed and a CUDA C++ seed.
+No LLM needed. `l1_002_standard_matrix_multiplication` is an fp16 GEMM with a Triton seed and a
+CUDA C++ seed.
 
 ```
 $ P=corpus/kernelbench/l1_002_standard_matrix_multiplication
@@ -161,8 +161,8 @@ $ smforge tile-search --shapes 2048x4096x8192:row --rounds 3 --per-round 6
 
 CUTLASS's default config does not fit this GPU's shared memory, so the baseline is the same tile
 with fewer pipeline stages (shared-memory buffers). After 18 configs the best runs 1.25x faster
-than that and 2.4% faster than cuBLAS. Every config tried is in `.smforge/runs/<run>/tilesearch/<shape>/trials.json`, and each
-one is a kernel file you can run with `smforge-skill`. More in [tile search](tile-search.md).
+than that and 2.4% faster than cuBLAS. Every config tried is in
+`.smforge/runs/<run>/tilesearch/<shape>/trials.json`, and each one is a kernel file you can run with `smforge-skill`. More in [tile search](tile-search.md).
 
 ## 6. Bring your own kernel
 

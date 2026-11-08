@@ -24,9 +24,9 @@ There are three ways to run it:
 
 |  | You give it | It does | Use it for |
 |---|---|---|---|
-| **Pipeline** | one or more problems (see below) | measures each kernel, lists what slows it down, and has the LLM fix those one at a time | optimizing many problems in one run |
-| **Claude Code engine** | the same | a Claude Code session decides what to try, and sm-forge checks and times each attempt and keeps the fastest | spending longer on one problem |
-| **Tile search** | matrix multiply sizes | has the LLM pick CUTLASS tile settings, and times them against cuBLAS | tuning a matmul for one size |
+| **Pipeline** | problems with a starting kernel | profiles each kernel, lists what holds it back, and rewrites it one fix at a time | batch runs over many problems |
+| **Claude Code engine** | the same | a headless Claude Code session tries its own ideas, and sm-forge times each one and picks the winner | a longer look at one problem |
+| **Tile search** | GEMM shapes | proposes CUTLASS tile configs and times them against cuBLAS | tuning a matmul for a shape |
 
 The repository comes with 138 problems ready to optimize, a knowledge base of optimization rules
 that the LLM is shown, and the results from an RTX 5080.
@@ -35,12 +35,12 @@ that the LLM is shown, and the results from an RTX 5080.
 
 | Term | Meaning |
 |---|---|
-| problem | one thing to optimize: a folder with a PyTorch reference, a spec and a starting kernel. The ones in `corpus/` come from [KernelBench](https://github.com/ScalingIntelligence/KernelBench) and common inference kernels |
-| reference | `reference.py`, the PyTorch module whose output every kernel must match |
-| spec | `spec.yaml`, the input shapes and dtypes. `ci` lists small, odd sizes used only to check correctness, and `bench-gpu` the size that is timed |
-| seed | the starting kernel (`kernel.py` for Triton, `kernel_cuda.py` for CUDA C++). It is correct but not tuned, and speedups are measured against it |
-| `dev` and `eval` | the two groups of problems. Development used `dev` only, and `eval` was kept back to check the results hold on problems the tool was not tuned on |
-| A/B run | the two kernels timed in alternating rounds, so a slowdown of the machine hits both. A speedup under 2% counts as no change |
+| problem | A folder with a PyTorch reference, a spec and a starting kernel. |
+| reference | The PyTorch module (`reference.py`) every kernel must match. |
+| spec | The input shapes to check (`ci`) and to time (`bench-gpu`), in `spec.yaml`. |
+| seed | The starting kernel that speedups are measured against. |
+| `dev` and `eval` | The problems used during development, and the ones held back for testing. |
+| A/B run | Two kernels timed in alternating rounds, where under 2% counts as no change. |
 
 ## Tested on
 
@@ -121,12 +121,6 @@ correctness: pass (2 draws, rtol 0.01, atol 0.01, weights none)
 baseline 10913.8 us, candidate 1165.3 us (p20): 9.366x, faster (min effect 2.0%)
 ```
 
-`check` passed: on two sets of random inputs the kernel's output matched PyTorch's within the
-tolerances. In `bench`, the first file is the candidate and `--baseline` the one it is compared
-with, so the Triton seed is 9.4x faster than the CUDA seed. The CUDA seed is a simple kernel
-without tensor cores, while the Triton one uses them. `p20` means each time is the 20th
-percentile of many runs.
-
 ### 5. Optimize a problem
 
 ```bash
@@ -144,7 +138,7 @@ calls cost. Results vary from run to run.
 The final kernel and every attempt are in `.smforge/runs/<run>/`. The run also replaces this
 problem's row in `results/pipeline.csv`, which holds the published numbers, so
 `git checkout results/` puts them back. The [examples](docs/examples.md) walk through reading a
-run like this one, and through everything else below.
+run like this one.
 
 ## What you can run
 
@@ -169,10 +163,10 @@ max-autotune are PyTorch's own compiler at its default and most thorough setting
 | Run | Result | Table |
 |---|---|---|
 | Triton pipeline, 96 `dev` problems | 80 faster than their seed, 2.55x on average. Faster than `torch.compile` on 87, by 2.36x on average. $1.07 per problem | `results/pipeline.csv` |
-| Triton pipeline, 42 `eval` problems | 36 faster than their seed and none slower, 2.73x on average. 2.61x faster than `torch.compile` and 2.27x faster than max-autotune. $1.03 per problem | `results/eval/eval/` |
 | CUDA C++ pipeline, 14 `dev` problems | 13 faster than their seed, 2.81x on average, ending about level with the Triton results (0.98x) | `results/pipeline_cuda.csv` |
-| CUTLASS tile search, 5 matmul sizes | Between 0.5% slower and 4.8% faster than cuBLAS. 1.10x to 1.30x faster than CUTLASS's default settings on 3 sizes | `results/tilesearch.csv` |
-| The same 12 `dev` problems under 13 settings | The choice of model matters most: 1.71x with Haiku 5.5, 2.04x with Opus 5.5, 2.13x with Opus 5.5 at high effort. Turning off the knowledge base or other parts of the pipeline changed the result by 3% or less, with one outlier problem left out | `results/eval/ablations.md` |
+| CUTLASS tile search, 5 GEMM shapes | Within 0.995x to 1.048x of cuBLAS. 1.10x to 1.30x over CUTLASS's default config on 3 shapes | `results/tilesearch.csv` |
+| Triton pipeline, 42 held-out `eval` problems | 36 faster than their seed and none slower, 2.73x on average. 2.61x faster than `torch.compile` and 2.27x faster than max-autotune. $1.03 per problem | `results/eval/eval/` |
+| Ablations, 13 configs on 12 `dev` problems | The model and its effort matter most: 1.71x with Haiku 5.5 to 2.13x with Opus 5.5 at high effort. No KB, no facts, no re-analysis or no rollback stay within 3% of the 2.04x baseline | `results/eval/ablations.md` |
 
 ## Running tests
 

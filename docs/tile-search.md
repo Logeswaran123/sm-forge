@@ -1,7 +1,6 @@
 # CUTLASS tile search
 
-`smforge tile-search` tunes CUTLASS's matrix multiply (GEMM) for given shapes. It uses CUTLASS's
-SM80 kernels, written for Ampere GPUs, which also run on newer ones. Each round the LLM proposes
+`smforge tile-search` tunes CUTLASS's SM80 GEMM for given shapes. Each round the LLM proposes
 configs, the harness builds, checks and times them, and the LLM sees every result before it
 proposes again. The best config is compared with cuBLAS and with CUTLASS's default config.
 
