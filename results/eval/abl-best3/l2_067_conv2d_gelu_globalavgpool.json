@@ -1,0 +1,48 @@
+{
+ "problem": "l2_067_conv2d_gelu_globalavgpool",
+ "family": "conv2d",
+ "seed_us": 1510.5600357055664,
+ "final_us": 365.56801199913025,
+ "ab": [
+  4.137779974559829,
+  4.132090298177293,
+  4.1345412156286425
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  3.708833823237533,
+  4.062747314912471,
+  4.132090298177293
+ ],
+ "baselines_us": {
+  "compile": 732.42,
+  "eager": 2809.02
+ },
+ "seed_kernel_us": 1471.2476666666669,
+ "final_kernel_us": 325.835,
+ "roofline_us": 163.73139387883384,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 19,
+  "input_tokens": 46,
+  "output_tokens": 70316,
+  "cache_read_tokens": 123159,
+  "cache_write_tokens": 84551,
+  "cost_usd": 2.7627192
+ },
+ "wall_s": 923.8050041850001
+}

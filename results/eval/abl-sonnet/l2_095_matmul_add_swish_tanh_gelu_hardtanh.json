@@ -1,0 +1,46 @@
+{
+ "problem": "l2_095_matmul_add_swish_tanh_gelu_hardtanh",
+ "family": "matmul",
+ "seed_us": 1467.3919677734375,
+ "final_us": 1215.4239416122437,
+ "ab": [
+  1.2073880359024811,
+  1.2074616917082204,
+  1.2073087566688554
+ ],
+ "kept_seed": false,
+ "plan": [
+  "memory_access",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "runs": [
+  1.2073087566688554
+ ],
+ "baselines_us": {
+  "compile": 1259.33,
+  "eager": 1323.07
+ },
+ "seed_kernel_us": 1494.5833333333333,
+ "final_kernel_us": 1250.1106666666667,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 15777,
+  "cache_read_tokens": 23082,
+  "cache_write_tokens": 26043,
+  "cost_usd": 0.3197822
+ },
+ "wall_s": 217.05278012300005
+}

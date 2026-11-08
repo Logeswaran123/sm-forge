@@ -1,0 +1,8 @@
+{
+ "gpu": "NVIDIA GeForce RTX 5080",
+ "driver": "621.14",
+ "torch": "2.11.0+cu128",
+ "triton": "3.6.0",
+ "commit": "d2092f0",
+ "date": "2026-11-08"
+}

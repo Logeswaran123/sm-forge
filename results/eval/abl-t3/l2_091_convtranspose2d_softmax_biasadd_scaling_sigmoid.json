@@ -1,0 +1,45 @@
+{
+ "problem": "l2_091_convtranspose2d_softmax_biasadd_scaling_sigmoid",
+ "family": "convtranspose2d",
+ "seed_us": 1825.2480030059814,
+ "final_us": 532.480001449585,
+ "ab": [
+  3.4326922431128026,
+  3.427824515544356,
+  3.428339539352114
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  3.427824515544356
+ ],
+ "baselines_us": {
+  "compile": 684.22,
+  "eager": 2962.5
+ },
+ "seed_kernel_us": 1903.1710000000005,
+ "final_kernel_us": 550.5266666666665,
+ "roofline_us": 295.6799864768982,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 31126,
+  "cache_read_tokens": 39860,
+  "cache_write_tokens": 40229,
+  "cost_usd": 1.6339772
+ },
+ "wall_s": 383.84804672000064
+}

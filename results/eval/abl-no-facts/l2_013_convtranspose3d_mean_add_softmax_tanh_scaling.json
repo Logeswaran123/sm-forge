@@ -1,0 +1,46 @@
+{
+ "problem": "l2_013_convtranspose3d_mean_add_softmax_tanh_scaling",
+ "family": "convtranspose3d",
+ "seed_us": 829.4079899787903,
+ "final_us": 139.29599523544312,
+ "ab": [
+  5.954284533283925,
+  5.954514315153751,
+  5.956112066437195
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "runs": [
+  5.954284533283925
+ ],
+ "baselines_us": {
+  "compile": 3397.66,
+  "eager": 4075.9
+ },
+ "seed_kernel_us": 805.7093333333333,
+ "final_kernel_us": 126.24466666666672,
+ "roofline_us": 997.9199543595314,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 30199,
+  "cache_read_tokens": 28907,
+  "cache_write_tokens": 47098,
+  "cost_usd": 1.4296294
+ },
+ "wall_s": 356.6966677540004
+}

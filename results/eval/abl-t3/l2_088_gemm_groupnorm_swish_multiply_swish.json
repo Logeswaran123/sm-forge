@@ -1,0 +1,45 @@
+{
+ "problem": "l2_088_gemm_groupnorm_swish_multiply_swish",
+ "family": "gemm",
+ "seed_us": 1363.9999628067017,
+ "final_us": 1188.223958015442,
+ "ab": [
+  1.1484614533750541,
+  1.147931712372505,
+  1.1484033969126088
+ ],
+ "kept_seed": false,
+ "plan": [
+  "fusion",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "fusion",
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.147931712372505
+ ],
+ "baselines_us": {
+  "compile": 1263.42,
+  "eager": 1482.34
+ },
+ "seed_kernel_us": 1419.0126666666665,
+ "final_kernel_us": 1227.3516666666665,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 46707,
+  "cache_read_tokens": 58549,
+  "cache_write_tokens": 49739,
+  "cost_usd": 2.1234657
+ },
+ "wall_s": 475.86530743599906
+}

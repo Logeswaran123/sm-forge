@@ -1,0 +1,44 @@
+{
+ "problem": "l1_035_groupnorm",
+ "family": "norm",
+ "seed_us": 1650.8480310440063,
+ "final_us": 1212.448000907898,
+ "ab": [
+  1.3621440077205562,
+  1.3631824963214025,
+  1.3615825419381518
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended"
+ ],
+ "runs": [
+  1.3615825419381518
+ ],
+ "baselines_us": {
+  "compile": 1651.74,
+  "eager": 2509.98
+ },
+ "seed_kernel_us": 1740.9719999999998,
+ "final_kernel_us": 1085.753999999998,
+ "roofline_us": 1061.0603303051107,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 14619,
+  "cache_read_tokens": 15632,
+  "cache_write_tokens": 21540,
+  "cost_usd": 0.47025979999999995
+ },
+ "wall_s": 272.48168837899993
+}

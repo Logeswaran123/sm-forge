@@ -1,0 +1,16 @@
+{
+ "split": null,
+ "dsl": "triton",
+ "model": "claude-haiku-5-5",
+ "effort": "medium",
+ "max_iters": 2,
+ "max_stages": 2,
+ "best_of": 1,
+ "kb": true,
+ "arch_gating": true,
+ "facts": true,
+ "reanalysis": true,
+ "rollback": true,
+ "ncu": true,
+ "memcheck": true
+}

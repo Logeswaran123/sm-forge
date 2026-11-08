@@ -1,0 +1,43 @@
+{
+ "problems": 12,
+ "improved": 12,
+ "kept_seed": 0,
+ "regressions": 0,
+ "incorrect": 0,
+ "geomean_over_seed": 2.298208129777424,
+ "median_over_seed": 1.6546478932008184,
+ "geomean_kernel_over_seed": 2.3336591393607224,
+ "geomean_over_eager": 4.523699349461003,
+ "geomean_over_compile": 2.5580327287705122,
+ "geomean_over_max_autotune": null,
+ "faster_than_eager": 12,
+ "faster_than_compile": 12,
+ "faster_than_max_autotune": 0,
+ "correctness": {
+  "ci": {
+   "pass": 12
+  },
+  "bench-gpu": {
+   "pass": 12
+  },
+  "kernelbench": {
+   "pass": 10,
+   "skipped": 1
+  }
+ },
+ "median_roofline_fraction": 0.9997969424549364,
+ "above_roofline": [
+  "l2_013_convtranspose3d_mean_add_softmax_tanh_scaling"
+ ],
+ "llm": {
+  "calls": 222,
+  "input_tokens": 530,
+  "output_tokens": 877250,
+  "cache_read_tokens": 1002583,
+  "cache_write_tokens": 1131086,
+  "cost_usd": 33.6390672,
+  "cache_hit_share": 0.4697701573283466,
+  "cost_per_problem": 2.8032556
+ },
+ "wall_s_per_problem": 971.6122781894165
+}
