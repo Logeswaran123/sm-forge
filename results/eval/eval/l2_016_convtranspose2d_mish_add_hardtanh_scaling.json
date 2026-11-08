@@ -1,0 +1,47 @@
+{
+ "problem": "l2_016_convtranspose2d_mish_add_hardtanh_scaling",
+ "family": "convtranspose2d",
+ "seed_us": 6459.392070770264,
+ "final_us": 567.296028137207,
+ "ab": [
+  11.405062571654366,
+  11.3870455572487,
+  11.386281148451802
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  11.386281148451802
+ ],
+ "baselines_us": {
+  "compile": 1549.38,
+  "eager": 4891.9,
+  "max-autotune": 1543.36
+ },
+ "seed_kernel_us": 6732.306333333334,
+ "final_kernel_us": 530.9526666666667,
+ "roofline_us": 379.03342465247647,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 29140,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 41102,
+  "cost_usd": 0.9142738
+ },
+ "wall_s": 340.36504281100133
+}

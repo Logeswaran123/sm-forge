@@ -1,0 +1,37 @@
+{
+ "problem": "l1_007_matmul_with_small_k_dimension",
+ "family": "matmul",
+ "seed_us": 1199.1360187530518,
+ "final_us": 1199.1360187530518,
+ "ab": [],
+ "kept_seed": true,
+ "plan": [
+  "autotuning"
+ ],
+ "accepted": [],
+ "runs": [
+  1.0
+ ],
+ "baselines_us": {
+  "compile": 1219.42,
+  "eager": 1219.58,
+  "max-autotune": 1173.82
+ },
+ "seed_kernel_us": 1125.5576666666664,
+ "final_kernel_us": 1211.460666666667,
+ "roofline_us": 1219.7453598491848,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 3,
+  "input_tokens": 8,
+  "output_tokens": 5686,
+  "cache_read_tokens": 17107,
+  "cache_write_tokens": 8279,
+  "cost_usd": 0.2543575
+ },
+ "wall_s": 195.30444121399978
+}

@@ -1,0 +1,46 @@
+{
+ "problem": "l2_001_conv2d_relu_biasadd",
+ "family": "conv2d",
+ "seed_us": 2080.76810836792,
+ "final_us": 1510.4000568389893,
+ "ab": [
+  1.3776271385493815,
+  1.3781355775154747,
+  1.378246804238759
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access",
+  "autotuning"
+ ],
+ "runs": [
+  1.3776271385493815
+ ],
+ "baselines_us": {
+  "compile": 2201.28,
+  "eager": 4180.0,
+  "max-autotune": 1848.35
+ },
+ "seed_kernel_us": 2064.8036666666667,
+ "final_kernel_us": 1366.161,
+ "roofline_us": 1289.3047847828711,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 31222,
+  "cache_read_tokens": 18898,
+  "cache_write_tokens": 30148,
+  "cost_usd": 1.0544441999999998
+ },
+ "wall_s": 384.2563476159994
+}

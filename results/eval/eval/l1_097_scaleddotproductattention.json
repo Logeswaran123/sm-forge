@@ -1,0 +1,38 @@
+{
+ "problem": "l1_097_scaleddotproductattention",
+ "family": "loss",
+ "seed_us": 1421.3440418243408,
+ "final_us": 1421.3440418243408,
+ "ab": [],
+ "kept_seed": true,
+ "plan": [
+  "fusion",
+  "autotuning"
+ ],
+ "accepted": [],
+ "runs": [
+  1.0
+ ],
+ "baselines_us": {
+  "compile": 3284.83,
+  "eager": 3279.14,
+  "max-autotune": 3272.8
+ },
+ "seed_kernel_us": 1304.0613333333329,
+ "final_kernel_us": 1304.283666666667,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 16,
+  "output_tokens": 21139,
+  "cache_read_tokens": 30599,
+  "cache_write_tokens": 33966,
+  "cost_usd": 1.0408358
+ },
+ "wall_s": 259.4209175920005
+}

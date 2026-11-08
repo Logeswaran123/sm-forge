@@ -84,3 +84,35 @@ def test_fact_deltas():
         "bias_relu: removed",
     ]
     assert render.fact_deltas(before, before).splitlines()[0] == "gemm: unchanged"
+
+
+@pytest.mark.gpu
+def test_stage_without_rollback_or_facts(monkeypatch, tmp_path):
+    from smforge.agents.analyze import measure
+
+    problem = copy_problem(tmp_path)
+    good = KERNEL.read_text()
+    problem.seed.write_text(good)
+    config = Config(cache_dir=tmp_path / "cache", timing=TimingConfig(warmup=3, iters=40, rounds=4))
+    llm = LLMClient(LLMConfig())
+    requests = scripted(monkeypatch, llm, [f"```python\n{slow(good)}```"] * 2)
+    with Runner(config) as runner:
+        measured = measure(runner, problem.seed, problem, ncu=False)
+        measured.shown = False
+        result = optimize_stage(
+            problem,
+            Stage.AUTOTUNING,
+            problem.seed,
+            runner,
+            llm,
+            load_kb(),
+            None,
+            2,
+            tmp_path / "w",
+            measured=measured,
+            rollback=False,
+        )
+    assert [a.outcome for a in result.attempts] == ["slower", "slower"]
+    assert result.accepted and result.speedup < 1 and result.kernel.read_text() == slow(good)
+    assert "sass:" not in requests[0]["messages"][0]["content"]
+    assert "Kernel changes from the current kernel" not in requests[1]["messages"][-1]["content"]

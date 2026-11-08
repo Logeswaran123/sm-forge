@@ -1,0 +1,47 @@
+{
+ "problem": "l2_060_convtranspose3d_swish_groupnorm_hardswish",
+ "family": "convtranspose3d",
+ "seed_us": 1545.2799797058105,
+ "final_us": 374.9760091304779,
+ "ab": [
+  4.12259872154449,
+  4.121895064626157,
+  4.1210102568671525
+ ],
+ "kept_seed": false,
+ "plan": [
+  "fusion",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "fusion",
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  4.1210102568671525
+ ],
+ "baselines_us": {
+  "compile": 3086.4,
+  "eager": 4595.26,
+  "max-autotune": 3075.39
+ },
+ "seed_kernel_us": 1668.9656666666667,
+ "final_kernel_us": 375.43666666666655,
+ "roofline_us": 145.84582534465085,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 30268,
+  "cache_read_tokens": 10832,
+  "cache_write_tokens": 36041,
+  "cost_usd": 0.8990805000000001
+ },
+ "wall_s": 393.87526691400035
+}

@@ -16,6 +16,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from smforge.agents.analyze import issues_text
+from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import BudgetExceeded, Completer, Usage
 from smforge.llm.structured import ask
 from smforge.models import Issue, IssueType, Stage
@@ -104,7 +105,7 @@ def plan(
             PlanReply,
             "planner",
         )
-    except BudgetExceeded:
+    except (BudgetExceeded, ClaudeCodeError):
         raise
     except Exception as e:
         log.warning("planner failed, using the canonical order: %s", e)

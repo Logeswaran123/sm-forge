@@ -1,0 +1,45 @@
+{
+ "problem": "l2_098_matmul_avgpool_gelu_scale_max",
+ "family": "matmul",
+ "seed_us": 1331.231951713562,
+ "final_us": 262.1760070323944,
+ "ab": [
+  5.077626922394448,
+  5.077626922394448,
+  5.077626922394448
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  5.077626922394448
+ ],
+ "baselines_us": {
+  "compile": 1242.14,
+  "eager": 1266.53,
+  "max-autotune": 1215.52
+ },
+ "seed_kernel_us": 1378.7689999999998,
+ "final_kernel_us": 263.49133333333316,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 34689,
+  "cache_read_tokens": 40532,
+  "cache_write_tokens": 35752,
+  "cost_usd": 1.3444237
+ },
+ "wall_s": 397.2438245120002
+}

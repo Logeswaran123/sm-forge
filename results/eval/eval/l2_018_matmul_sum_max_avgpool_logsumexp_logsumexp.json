@@ -1,0 +1,45 @@
+{
+ "problem": "l2_018_matmul_sum_max_avgpool_logsumexp_logsumexp",
+ "family": "matmul",
+ "seed_us": 387.3920142650604,
+ "final_us": 339.77600932121277,
+ "ab": [
+  1.1447938263012432,
+  1.140139396654203,
+  1.1466289898895516
+ ],
+ "kept_seed": false,
+ "plan": [
+  "memory_access",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access"
+ ],
+ "runs": [
+  1.140139396654203
+ ],
+ "baselines_us": {
+  "compile": 5089.82,
+  "eager": 5214.94,
+  "max-autotune": 4163.74
+ },
+ "seed_kernel_us": 334.53500000000014,
+ "final_kernel_us": 321.3516666666667,
+ "roofline_us": 3632.4160099029536,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 21814,
+  "cache_read_tokens": 20676,
+  "cache_write_tokens": 40576,
+  "cost_usd": 1.0633657
+ },
+ "wall_s": 257.73557572100253
+}

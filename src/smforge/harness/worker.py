@@ -87,9 +87,12 @@ class Session:
         variant: str | None = None,
         index: int = 0,
         dtype: str | None = None,
+        first_draw: int = 0,
     ) -> dict:
         workload = self.workload(spec, variant, index, oracle, dtype)
-        result = check_kernel(Path(candidate), Path(oracle), workload, rtol, atol, draws, self.refs)
+        result = check_kernel(
+            Path(candidate), Path(oracle), workload, rtol, atol, draws, self.refs, first_draw
+        )
         return result.model_dump(mode="json")
 
     def op_launches(

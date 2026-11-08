@@ -1,0 +1,45 @@
+{
+ "problem": "l2_054_conv2d_multiply_leakyrelu_gelu",
+ "family": "conv2d",
+ "seed_us": 1252.351999282837,
+ "final_us": 1201.151967048645,
+ "ab": [
+  1.0426257739559763,
+  1.0435906911316333,
+  1.043515393195246
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access"
+ ],
+ "runs": [
+  1.0426257739559763
+ ],
+ "baselines_us": {
+  "compile": 1396.77,
+  "eager": 2726.53,
+  "max-autotune": 1294.34
+ },
+ "seed_kernel_us": 1272.9186666666667,
+ "final_kernel_us": 1162.1416666666667,
+ "roofline_us": 654.9255755153354,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 8,
+  "input_tokens": 22,
+  "output_tokens": 37612,
+  "cache_read_tokens": 34493,
+  "cache_write_tokens": 37904,
+  "cost_usd": 1.4680731
+ },
+ "wall_s": 459.125172871
+}

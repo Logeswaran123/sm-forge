@@ -1,0 +1,45 @@
+{
+ "problem": "l2_015_convtranspose3d_batchnorm_subtract",
+ "family": "convtranspose3d",
+ "seed_us": 5068.863868713379,
+ "final_us": 274.3360102176666,
+ "ab": [
+  18.534995558123185,
+  18.58697285172732,
+  18.47684474484989
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  18.47684474484989
+ ],
+ "baselines_us": {
+  "compile": 2145.31,
+  "eager": 2603.78,
+  "max-autotune": 1985.57
+ },
+ "seed_kernel_us": 4973.5396666666675,
+ "final_kernel_us": 253.38000000000025,
+ "roofline_us": 151.7954785561759,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 45414,
+  "cache_read_tokens": 39820,
+  "cache_write_tokens": 40272,
+  "cost_usd": 1.6379247000000001
+ },
+ "wall_s": 535.6036917700003
+}

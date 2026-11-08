@@ -1,0 +1,45 @@
+{
+ "problem": "l2_080_gemm_max_subtract_gelu",
+ "family": "gemm",
+ "seed_us": 1328.160047531128,
+ "final_us": 3.7440001033246517,
+ "ab": [
+  354.7435926488701,
+  360.91304838574973,
+  361.0347843912365
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  354.7435926488701
+ ],
+ "baselines_us": {
+  "compile": 1245.28,
+  "eager": 1271.62,
+  "max-autotune": 1220.51
+ },
+ "seed_kernel_us": 1370.672666666667,
+ "final_kernel_us": 0.813666666666677,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 6765,
+  "cache_read_tokens": 37140,
+  "cache_write_tokens": 17259,
+  "cost_usd": 0.36761730000000004
+ },
+ "wall_s": 140.244922977
+}

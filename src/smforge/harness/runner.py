@@ -133,8 +133,10 @@ class Runner:
         atol: float | None = None,
         draws: int | None = None,
         dtype: str | None = None,
+        first_draw: int = 0,
     ) -> CheckResult:
-        """``dtype`` replaces the variant's dtype, and its tolerance with that dtype's default."""
+        """``dtype`` replaces the variant's dtype, and its tolerance with that dtype's default.
+        ``first_draw`` picks other input draws than the ``0..draws-1`` that optimization sees."""
         variant, resolved, variant_spec = _resolve(spec, variant, index)
         if dtype is not None and dtype != resolved:
             resolved, variant_spec = dtype, None
@@ -150,6 +152,7 @@ class Runner:
                 atol=atol,
                 draws=draws or self.config.correctness.draws,
                 dtype=dtype,
+                first_draw=first_draw,
                 **_workload(spec, variant, index),
             )
         except WorkerError as e:

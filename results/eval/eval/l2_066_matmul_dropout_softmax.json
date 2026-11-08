@@ -1,0 +1,46 @@
+{
+ "problem": "l2_066_matmul_dropout_softmax",
+ "family": "matmul",
+ "seed_us": 805.8559894561768,
+ "final_us": 649.2480039596558,
+ "ab": [
+  1.2460446906305158,
+  1.2412144273704269,
+  1.2426571606779213
+ ],
+ "kept_seed": false,
+ "plan": [
+  "persistent_kernel",
+  "fusion",
+  "autotuning"
+ ],
+ "accepted": [
+  "persistent_kernel",
+  "fusion"
+ ],
+ "runs": [
+  1.2412144273704269
+ ],
+ "baselines_us": {
+  "compile": 900.99,
+  "eager": 893.89,
+  "max-autotune": 755.49
+ },
+ "seed_kernel_us": 824.81,
+ "final_kernel_us": 665.0966666666666,
+ "roofline_us": 615.8307807418169,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 28765,
+  "cache_read_tokens": 23736,
+  "cache_write_tokens": 37027,
+  "cost_usd": 1.0456207
+ },
+ "wall_s": 391.1361022860001
+}

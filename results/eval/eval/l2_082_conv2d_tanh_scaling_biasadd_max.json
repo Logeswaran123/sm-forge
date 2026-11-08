@@ -1,0 +1,45 @@
+{
+ "problem": "l2_082_conv2d_tanh_scaling_biasadd_max",
+ "family": "conv2d",
+ "seed_us": 10591.391563415527,
+ "final_us": 256.00001215934753,
+ "ab": [
+  41.37262132949784,
+  41.37999740393845,
+  41.37599644234793
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  41.37262132949784
+ ],
+ "baselines_us": {
+  "compile": 1424.96,
+  "eager": 4208.54,
+  "max-autotune": 1396.83
+ },
+ "seed_kernel_us": 10999.321000000002,
+ "final_kernel_us": 247.7626666666666,
+ "roofline_us": 163.73139387883384,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 31057,
+  "cache_read_tokens": 40607,
+  "cache_write_tokens": 35919,
+  "cost_usd": 1.2933197
+ },
+ "wall_s": 356.7615825510002
+}

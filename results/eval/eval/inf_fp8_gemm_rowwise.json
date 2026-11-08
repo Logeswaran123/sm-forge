@@ -1,0 +1,37 @@
+{
+ "problem": "inf_fp8_gemm_rowwise",
+ "family": "gemm_fp8",
+ "seed_us": 612.3520135879517,
+ "final_us": 612.3520135879517,
+ "ab": [],
+ "kept_seed": true,
+ "plan": [
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [],
+ "runs": [
+  1.0
+ ],
+ "baselines_us": {
+  "compile": 4368.45,
+  "eager": 4699.2,
+  "max-autotune": 4356.16
+ },
+ "seed_kernel_us": 565.6156666666665,
+ "final_kernel_us": 551.6803333333334,
+ "roofline_us": 586.8800282478334,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 16,
+  "output_tokens": 19205,
+  "cache_read_tokens": 18156,
+  "cache_write_tokens": 27565,
+  "cost_usd": 0.8698007999999999
+ },
+ "wall_s": 206.65081610700054
+}

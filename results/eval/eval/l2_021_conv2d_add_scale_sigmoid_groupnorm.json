@@ -1,0 +1,46 @@
+{
+ "problem": "l2_021_conv2d_add_scale_sigmoid_groupnorm",
+ "family": "conv2d",
+ "seed_us": 1423.4240055084229,
+ "final_us": 397.3439931869507,
+ "ab": [
+  3.584038044344066,
+  3.584521369041958,
+  3.5823468579244397
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "fusion",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "fusion"
+ ],
+ "runs": [
+  3.5823468579244397
+ ],
+ "baselines_us": {
+  "compile": 757.47,
+  "eager": 2669.54,
+  "max-autotune": 749.6
+ },
+ "seed_kernel_us": 1394.3476666666666,
+ "final_kernel_us": 382.83900000000057,
+ "roofline_us": 187.12138695401848,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 28463,
+  "cache_read_tokens": 21787,
+  "cache_write_tokens": 50759,
+  "cost_usd": 1.1423078
+ },
+ "wall_s": 331.0678996800016
+}

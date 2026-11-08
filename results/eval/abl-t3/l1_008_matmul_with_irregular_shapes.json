@@ -1,0 +1,45 @@
+{
+ "problem": "l1_008_matmul_with_irregular_shapes",
+ "family": "matmul",
+ "seed_us": 4587.744235992432,
+ "final_us": 2616.5759563446045,
+ "ab": [
+  1.7534674514370903,
+  1.7533388338558222,
+  1.7545772758620186
+ ],
+ "kept_seed": false,
+ "plan": [
+  "tensor_descriptors",
+  "device_specific",
+  "autotuning"
+ ],
+ "accepted": [
+  "tensor_descriptors",
+  "device_specific"
+ ],
+ "runs": [
+  1.7533388338558222
+ ],
+ "baselines_us": {
+  "compile": 2769.95,
+  "eager": 4975.62
+ },
+ "seed_kernel_us": 4919.843,
+ "final_kernel_us": 2885.986,
+ "roofline_us": 2465.7582571120774,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 8,
+  "input_tokens": 22,
+  "output_tokens": 32738,
+  "cache_read_tokens": 37670,
+  "cache_write_tokens": 50655,
+  "cost_usd": 1.7144392999999998
+ },
+ "wall_s": 446.2112461050001
+}

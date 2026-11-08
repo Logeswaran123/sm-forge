@@ -1,0 +1,43 @@
+{
+ "problem": "inf_paged_attention_decode",
+ "family": "attention",
+ "seed_us": 1194.2720413208008,
+ "final_us": 303.1040132045746,
+ "ab": [
+  3.940139322783392,
+  3.9455296711732206,
+  3.975342767581027
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic"
+ ],
+ "runs": [
+  3.940139322783392
+ ],
+ "baselines_us": {
+  "compile": 4167.58,
+  "eager": 8702.21
+ },
+ "seed_kernel_us": 1239.1573333333336,
+ "final_kernel_us": 290.68733333333324,
+ "roofline_us": 303.78912800370017,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 18775,
+  "cache_read_tokens": 8558,
+  "cache_write_tokens": 30506,
+  "cost_usd": 0.6236623
+ },
+ "wall_s": 214.54787083500014
+}

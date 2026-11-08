@@ -15,6 +15,7 @@ from smforge.device.tools import tool_status
 from smforge.harness.ncu import NcuError, NcuUnavailable
 from smforge.harness.runner import Runner
 from smforge.kb.loader import load_kb
+from smforge.llm.claude_code import ClaudeCodeError
 from smforge.llm.client import LLMClient
 from smforge.models import (
     Comparison,
@@ -83,6 +84,13 @@ def test_plan(monkeypatch):
     monkeypatch.setattr(llm, "_send", fail)
     stages, reason, _ = plan(llm, "summary", issues)
     assert stages == routed(issues) and reason.startswith("fallback")
+
+    def limit(request):
+        raise ClaudeCodeError("You've hit your 5-hour limit")
+
+    monkeypatch.setattr(llm, "_send", limit)
+    with pytest.raises(ClaudeCodeError, match="5-hour limit"):
+        plan(llm, "summary", issues)
 
 
 def facts(**kw) -> KernelFacts:
@@ -344,3 +352,15 @@ def test_run_pipeline(monkeypatch, tmp_path):
     assert record["summary"] == "tiles are too small"
     assert [m["ok"] for m in record["memcheck"]] == ([True] if memcheck else [])
     assert (tmp_path / "w" / "output.py").read_text() == good
+
+
+def test_finalize_without_rollback(tmp_path):
+    problem = copy_problem(tmp_path)
+    slower = tmp_path / "slower.py"
+    stages = [StageResult(problem.id, Stage.FUSION, True, slower, 20, 25)]
+    result = PipelineResult(problem.id, "", [], "", [], stages, 20, 20, problem.seed)
+    finalize(result, problem, Compare(0.9), memcheck=False)
+    assert result.kernel == problem.seed and result.final_us == result.seed_us
+    finalize(result, problem, Compare(0.9), memcheck=False, rollback=False)
+    assert result.kernel == slower and result.ab == [0.9]
+    assert result.speedup == pytest.approx(0.9)

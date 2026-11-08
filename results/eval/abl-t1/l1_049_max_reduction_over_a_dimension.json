@@ -1,0 +1,44 @@
+{
+ "problem": "l1_049_max_reduction_over_a_dimension",
+ "family": "reduction",
+ "seed_us": 3488.2240295410156,
+ "final_us": 2401.3121128082275,
+ "ab": [
+  1.4526325049273554,
+  1.4563444260689098,
+  1.4569048628747774
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended"
+ ],
+ "runs": [
+  1.4526325049273554
+ ],
+ "baselines_us": {
+  "compile": 3044.38,
+  "eager": 2858.82
+ },
+ "seed_kernel_us": 3749.9276666666665,
+ "final_kernel_us": 2631.4489999999996,
+ "roofline_us": 2425.27994958877,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 21097,
+  "cache_read_tokens": 10832,
+  "cache_write_tokens": 20051,
+  "cost_usd": 0.5866256000000001
+ },
+ "wall_s": 301.3797182359999
+}

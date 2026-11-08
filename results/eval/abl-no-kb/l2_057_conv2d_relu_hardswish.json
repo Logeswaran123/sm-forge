@@ -1,0 +1,43 @@
+{
+ "problem": "l2_057_conv2d_relu_hardswish",
+ "family": "conv2d",
+ "seed_us": 225.24799406528473,
+ "final_us": 178.17600071430206,
+ "ab": [
+  1.2643678208983733,
+  1.2643678208983733,
+  1.2641881800145502
+ ],
+ "kept_seed": false,
+ "plan": [
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access"
+ ],
+ "runs": [
+  1.2641881800145502
+ ],
+ "baselines_us": {
+  "compile": 512.03,
+  "eager": 2640.93
+ },
+ "seed_kernel_us": 227.5043333333334,
+ "final_kernel_us": 182.08833333333337,
+ "roofline_us": 165.83819100415553,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 12,
+  "output_tokens": 11145,
+  "cache_read_tokens": 8254,
+  "cache_write_tokens": 13756,
+  "cost_usd": 0.41038440000000004
+ },
+ "wall_s": 160.4464450790001
+}

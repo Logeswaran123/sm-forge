@@ -1,0 +1,47 @@
+{
+ "problem": "l1_024_logsoftmax",
+ "family": "activation",
+ "seed_us": 2890.8159732818604,
+ "final_us": 2040.6079292297363,
+ "ab": [
+  1.416644487102944,
+  1.418470325492369,
+  1.4169906785967543
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "runs": [
+  1.416644487102944
+ ],
+ "baselines_us": {
+  "compile": 2890.78,
+  "eager": 3716.99,
+  "max-autotune": 2596.86
+ },
+ "seed_kernel_us": 2757.09,
+ "final_kernel_us": 2013.453666666667,
+ "roofline_us": 1818.9600706100464,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 5,
+  "input_tokens": 10,
+  "output_tokens": 14771,
+  "cache_read_tokens": 14552,
+  "cache_write_tokens": 14593,
+  "cost_usd": 0.41712359999999993
+ },
+ "wall_s": 308.34805824399973
+}

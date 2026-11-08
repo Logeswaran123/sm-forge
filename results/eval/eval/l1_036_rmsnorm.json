@@ -1,0 +1,38 @@
+{
+ "problem": "l1_036_rmsnorm",
+ "family": "norm",
+ "seed_us": 1122.3360300064087,
+ "final_us": 1122.3360300064087,
+ "ab": [],
+ "kept_seed": true,
+ "plan": [
+  "memory_access",
+  "autotuning"
+ ],
+ "accepted": [],
+ "runs": [
+  1.0
+ ],
+ "baselines_us": {
+  "compile": 1126.5,
+  "eager": 2850.11,
+  "max-autotune": 1101.63
+ },
+ "seed_kernel_us": 1052.551666666667,
+ "final_kernel_us": 1055.804666666667,
+ "roofline_us": 1061.0600411891937,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "skipped: out of memory"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 16,
+  "output_tokens": 9196,
+  "cache_read_tokens": 23826,
+  "cache_write_tokens": 19524,
+  "cost_usd": 0.5209729000000001
+ },
+ "wall_s": 172.09880809599963
+}

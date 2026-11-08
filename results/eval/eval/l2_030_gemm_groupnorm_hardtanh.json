@@ -1,0 +1,46 @@
+{
+ "problem": "l2_030_gemm_groupnorm_hardtanh",
+ "family": "gemm",
+ "seed_us": 1293.3440208435059,
+ "final_us": 1187.648057937622,
+ "ab": [
+  1.0890254350212223,
+  1.088996030599694,
+  1.0892601807696918
+ ],
+ "kept_seed": false,
+ "plan": [
+  "fusion",
+  "persistent_kernel",
+  "autotuning"
+ ],
+ "accepted": [
+  "fusion",
+  "persistent_kernel"
+ ],
+ "runs": [
+  1.088996030599694
+ ],
+ "baselines_us": {
+  "compile": 1256.45,
+  "eager": 1446.14,
+  "max-autotune": 1226.56
+ },
+ "seed_kernel_us": 1226.1576666666667,
+ "final_kernel_us": 1119.5350000000003,
+ "roofline_us": 1182.7199459075928,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 34259,
+  "cache_read_tokens": 41215,
+  "cache_write_tokens": 47220,
+  "cost_usd": 1.5250888
+ },
+ "wall_s": 354.8566500759989
+}

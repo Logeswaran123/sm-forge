@@ -1,0 +1,46 @@
+{
+ "problem": "l2_006_conv3d_softmax_maxpool_maxpool",
+ "family": "conv3d",
+ "seed_us": 824.3200182914734,
+ "final_us": 163.80800306797028,
+ "ab": [
+  5.037500286490839,
+  5.032232875395173,
+  5.037500286490839
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "autotuning"
+ ],
+ "runs": [
+  5.032232875395173
+ ],
+ "baselines_us": {
+  "compile": 1139.74,
+  "eager": 1505.31,
+  "max-autotune": 379.04
+ },
+ "seed_kernel_us": 752.3540000000002,
+ "final_kernel_us": 144.46999999999994,
+ "roofline_us": 35.97390582541493,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 30311,
+  "cache_read_tokens": 19390,
+  "cache_write_tokens": 43788,
+  "cost_usd": 1.313173
+ },
+ "wall_s": 346.8305800119997
+}

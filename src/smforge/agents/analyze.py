@@ -47,10 +47,13 @@ IDLE_SHARE = 0.5
 
 @dataclass
 class Measurements:
+    """``shown`` False keeps all but the timing out of prompts (the no-facts ablation)."""
+
     timing: Timing
     facts: FactsReport
     launches: LaunchProfile
     ncu: list[NcuKernel] | None
+    shown: bool = True
 
 
 class AnalyzerIssue(BaseModel):
@@ -211,6 +214,8 @@ def analyze(
 
 def measurements_text(m: Measurements, dtype: str, profile: DeviceProfile | None) -> str:
     ridge = profile.roofline.ridge(dtype) if profile and profile.roofline else None
+    if not m.shown:
+        return f"Measured on `{TIMED_VARIANT}`: {render.timing(m.timing)}"
     lines = [
         f"Measured on `{TIMED_VARIANT}`: {render.timing(m.timing)}",
         "",

@@ -1,0 +1,45 @@
+{
+ "problem": "l2_023_conv3d_groupnorm_mean",
+ "family": "conv3d",
+ "seed_us": 1120.2880144119263,
+ "final_us": 366.65600538253784,
+ "ab": [
+  3.0687122924888537,
+  3.067697586338519,
+  3.055419788482975
+ ],
+ "kept_seed": false,
+ "plan": [
+  "algorithmic",
+  "dtype_fix",
+  "autotuning"
+ ],
+ "accepted": [
+  "algorithmic",
+  "autotuning"
+ ],
+ "runs": [
+  3.055419788482975
+ ],
+ "baselines_us": {
+  "compile": 1931.1,
+  "eager": 2602.18
+ },
+ "seed_kernel_us": 1134.2463333333335,
+ "final_kernel_us": 382.2583333333334,
+ "roofline_us": 84.79563515990662,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 7,
+  "input_tokens": 18,
+  "output_tokens": 20453,
+  "cache_read_tokens": 38456,
+  "cache_write_tokens": 33360,
+  "cost_usd": 0.9389789999999999
+ },
+ "wall_s": 264.4696605039999
+}

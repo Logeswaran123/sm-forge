@@ -1,0 +1,47 @@
+{
+ "problem": "l2_020_convtranspose3d_sum_residualadd_multiply_residualadd",
+ "family": "convtranspose3d",
+ "seed_us": 13916.159629821777,
+ "final_us": 237.56800591945648,
+ "ab": [
+  58.62930771962148,
+  58.57758318912616,
+  59.609647434545266
+ ],
+ "kept_seed": false,
+ "plan": [
+  "open_ended",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "accepted": [
+  "open_ended",
+  "tensor_descriptors",
+  "autotuning"
+ ],
+ "runs": [
+  58.57758318912616
+ ],
+ "baselines_us": {
+  "compile": 987.01,
+  "eager": 3101.22,
+  "max-autotune": 983.68
+ },
+ "seed_kernel_us": 13176.573333333332,
+ "final_kernel_us": 214.73833333333314,
+ "roofline_us": 161.17894344398564,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 36925,
+  "cache_read_tokens": 22633,
+  "cache_write_tokens": 39103,
+  "cost_usd": 1.3351731
+ },
+ "wall_s": 378.6933923260003
+}

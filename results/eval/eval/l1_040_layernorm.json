@@ -1,0 +1,46 @@
+{
+ "problem": "l1_040_layernorm",
+ "family": "norm",
+ "seed_us": 61.28000095486641,
+ "final_us": 38.91199827194214,
+ "ab": [
+  1.5748356207923901,
+  1.5797697733730576,
+  1.577302744950868
+ ],
+ "kept_seed": false,
+ "plan": [
+  "fusion",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "fusion",
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  1.5748356207923901
+ ],
+ "baselines_us": {
+  "compile": 67.62,
+  "eager": 6729.73,
+  "max-autotune": 59.42
+ },
+ "seed_kernel_us": 21.190000000000055,
+ "final_kernel_us": 21.240333333333183,
+ "roofline_us": 56.84250220656395,
+ "correctness": {
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 18488,
+  "cache_read_tokens": 22419,
+  "cache_write_tokens": 30689,
+  "cost_usd": 0.7852179000000001
+ },
+ "wall_s": 216.97903418100032
+}

@@ -1,0 +1,46 @@
+{
+ "problem": "l2_045_gemm_sigmoid_logsumexp",
+ "family": "gemm",
+ "seed_us": 4530.111789703369,
+ "final_us": 3459.775924682617,
+ "ab": [
+  1.312030908114104,
+  1.3093656607599347,
+  1.3097039624611126
+ ],
+ "kept_seed": false,
+ "plan": [
+  "memory_access",
+  "open_ended",
+  "autotuning"
+ ],
+ "accepted": [
+  "memory_access",
+  "open_ended",
+  "autotuning"
+ ],
+ "runs": [
+  1.3093656607599347
+ ],
+ "baselines_us": {
+  "compile": 3933.12,
+  "eager": 4028.22
+ },
+ "seed_kernel_us": 4986.3820000000005,
+ "final_kernel_us": 3715.4493333333344,
+ "roofline_us": 3548.1598377227783,
+ "correctness": {
+  "ci": "pass",
+  "bench-gpu": "pass",
+  "kernelbench": "pass"
+ },
+ "llm": {
+  "calls": 6,
+  "input_tokens": 14,
+  "output_tokens": 35684,
+  "cache_read_tokens": 20611,
+  "cache_write_tokens": 34702,
+  "cost_usd": 1.1658747999999999
+ },
+ "wall_s": 463.0193025640001
+}
